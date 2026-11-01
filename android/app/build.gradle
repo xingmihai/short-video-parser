@@ -6,7 +6,6 @@ react {
     autolinkLibrariesWithApp()
 }
 
-def enableSeparateBuildPerCPUArchitecture = false
 def jscFlavor = 'org.webkit:android-jsc:+'
 
 android {
@@ -37,6 +36,7 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
+            // 统一用 debug 签名，产出可直接安装的 APK（无需额外配置正式签名）
             signingConfig signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
@@ -47,10 +47,10 @@ android {
 dependencies {
     implementation("com.facebook.react:react-android")
 
-    // 上游请求（媒体直链拉取，流式转发）
+    // 上游媒体直链请求（流式转发）
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
-    if (hermesPath.toFile().exists()) {
+    if (hermesEnabled.toBoolean()) {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor

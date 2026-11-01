@@ -1,0 +1,114 @@
+name: 构建 Android 安装包
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: '同时发布 GitHub Release（附 APK 与 bundle）'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 安装 SDK 组件
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null
+
+      - name: 安装 JS 依赖
+        run: npm ci --no-audit --no-fund
+
+      - name: Gradle 缓存
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: 生成 index.android.bundle（明文 JS）
+        run: |
+          mkdir -p android/app/src/main/assets
+          npx react-native bundle \
+            --platform android \
+            --dev false \
+            --entry-file index.js \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res/ \
+            --sourcemap-output android/app/src/main/assets/index.android.bundle.map
+          ls -lh android/app/src/main/assets/index.android.bundle
+
+      - name: 编译 Release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: 整理产物
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/*.apk dist/sv-proxy-android.apk
+          cp android/app/src/main/assets/index.android.bundle dist/index.android.bundle
+          [ -f android/app/src/main/assets/index.android.bundle.map ] && \
+            cp android/app/src/main/assets/index.android.bundle.map dist/ || true
+          echo "=== 产物 ==="
+          ls -lh dist/
+          echo "=== APK 签名校验 ==="
+          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs dist/sv-proxy-android.apk | head -8
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: sv-proxy-android-apk-${{ github.run_number }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 发布 Release
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v1.0.0-build{0}', github.run_number) }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('sv-proxy-android build {0}', github.run_number) }}
+          body: |
+            Android 安装包，由 GitHub Actions 自动构建。
+
+            - `sv-proxy-android.apk`：已签名，可直接安装
+            - `index.android.bundle`：明文 JS 版，可自行替换后重打包
+            - `index.android.bundle.map`：sourcemap
+
+            App 启动后在 8080 端口提供本地代理网关。
+          files: |
+            dist/*.apk
+            dist/index.android.bundle
+            dist/index.android.bundle.map
+          draft: false
+          prerelease: false

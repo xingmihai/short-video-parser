@@ -1,26 +1,15 @@
 pluginManagement {
     repositories {
+        google()
+        mavenCentral()
         gradlePluginPortal()
-        google()
-        mavenCentral()
     }
+    includeBuild("../node_modules/@react-native/gradle-plugin")
 }
-
-dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
-    repositories {
-        google()
-        mavenCentral()
-        maven {
-            url = uri("$rootDir/../node_modules/react-native/android")
-        }
-        maven {
-            url = uri("$rootDir/../node_modules/@react-native/gradle-plugin")
-        }
-    }
+plugins { id("com.facebook.react.settings") }
+extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
+    ex.autolinkLibrariesFromCommand()
 }
-
 rootProject.name = 'svproxy'
-apply from: file("../node_modules/@react-native/gradle-plugin/src/settings.gradle")
 include ':app'
 includeBuild('../node_modules/@react-native/gradle-plugin')
