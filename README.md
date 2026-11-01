@@ -42,7 +42,27 @@ npm run bundle            # Hermes 字节码版
 npm run bundle plain      # 明文 JS 版（可文本编辑）
 ```
 
-明文版要生效，需把 `android/gradle.properties` 里的 `hermesEnabled` 改成 `false`。
+明文版要生效，需把 `android/gradle.properties` 里的 `hermesEnabled` 改成 `false`（仓库默认已是 `false`）。
+
+---
+
+## CI 自动出安装包
+
+仓库内置 `.github/workflows/build-apk.yml`：
+
+- `push` 到 `main` / PR / 手动触发 → 自动构建
+- 打 `v*` 标签 → 额外发布 GitHub Release，附可直接安装的 APK
+- 流程：`npm ci` → 生成 `index.android.bundle`（明文）→ `./gradlew assembleRelease` → 上传产物
+
+产物三件套（Actions → Artifacts，或 Releases 页下载）：
+
+| 文件 | 说明 |
+|---|---|
+| `sv-proxy-android.apk` | 已签名的 Release 包，直接装 |
+| `index.android.bundle` | 明文 JS，可自行替换后重打包 |
+| `index.android.bundle.map` | sourcemap，定位源码用 |
+
+手动触发：仓库 **Actions → 构建 Android 安装包 → Run workflow**，勾选「同时发布 GitHub Release」即可生成带 APK 直链的版本。
 
 ---
 

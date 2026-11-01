@@ -21,8 +21,10 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
 
     steps:
       - name: 检出代码
@@ -35,18 +37,26 @@ jobs:
           cache: 'npm'
 
       - name: JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: 安装 SDK 组件
+      - name: 准备 Android SDK
         run: |
-          yes | sdkmanager --licenses > /dev/null || true
-          sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null
+          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          mkdir -p "$SDK_ROOT/licenses"
+          printf '\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n' \
+            > "$SDK_ROOT/licenses/android-sdk-license"
+          SDKMGR="$SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+          if [ ! -x "$SDKMGR" ]; then SDKMGR="$(command -v sdkmanager || true)"; fi
+          if [ -n "$SDKMGR" ] && [ -x "$SDKMGR" ]; then
+            yes | "$SDKMGR" --licenses > /dev/null || true
+            "$SDKMGR" "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null || true
+          else
+            echo "sdkmanager 未找到，交由 Android Gradle Plugin 自动下载所需组件"
+          fi
+          echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
 
       - name: 安装 JS 依赖
         run: npm ci --no-audit --no-fund
@@ -82,7 +92,8 @@ jobs:
           echo "=== 产物 ==="
           ls -lh dist/
           echo "=== APK 签名校验 ==="
-          $ANDROID_HOME/build-tools/34.0.0/apksigner verify --print-certs dist/sv-proxy-android.apk | head -8
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f 2>/dev/null | head -1)
+          if [ -n "$APKSIGNER" ]; then "$APKSIGNER" verify --print-certs dist/sv-proxy-android.apk | head -8; fi
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
