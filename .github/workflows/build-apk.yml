@@ -77,6 +77,11 @@ jobs:
             --sourcemap-output android/app/src/main/assets/index.android.bundle.map \
             2>&1 | tee /tmp/bundle.log
           ls -lh android/app/src/main/assets/index.android.bundle
+          mkdir -p dist
+          cp android/app/src/main/assets/index.android.bundle dist/index.android.bundle
+          cp android/app/src/main/assets/index.android.bundle.map dist/index.android.bundle.map
+          # 移除源码目录副本，避免与 Gradle 生成的同名 asset 重复
+          rm -f android/app/src/main/assets/index.android.bundle android/app/src/main/assets/index.android.bundle.map
 
       - name: 编译 Release APK
         working-directory: android
@@ -89,9 +94,10 @@ jobs:
         run: |
           mkdir -p dist
           cp android/app/build/outputs/apk/release/*.apk dist/sv-proxy-android.apk
-          cp android/app/src/main/assets/index.android.bundle dist/index.android.bundle
-          [ -f android/app/src/main/assets/index.android.bundle.map ] && \
-            cp android/app/src/main/assets/index.android.bundle.map dist/ || true
+          if [ ! -f dist/index.android.bundle ]; then
+            B=$(find android/app/build -name index.android.bundle -type f 2>/dev/null | head -1)
+            [ -n "$B" ] && cp "$B" dist/index.android.bundle
+          fi
           echo "=== 产物 ==="
           ls -lh dist/
           echo "=== APK 签名校验 ==="
