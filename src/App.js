@@ -1,14 +1,15 @@
 /**
- * App 主界面：在软件里粘贴抖音分享链接 → 解析 → 播放/下载
+ * App 主界面：粘贴抖音分享链接 → 解析 → 播放 / 下载
  *
- * 链路（全部在 index.android.bundle 内）：
- *   src/resolve.js   解析分享短链，拿无水印直链
+ * 无本地网关、无 8080 端口、无局域网地址。
+ * 链路全部在 index.android.bundle 内：
+ *   src/resolve.js  解析分享短链，拿无水印直链
  *   ↓
- *   src/proxy.js     本地网关代理，注入 Referer 解决 403 防盗链
- *   ↓
- *   系统播放器 / 浏览器 / Image 预览
+ *   Image 带 Referer 头直接加载封面/图集
+ *   播放：系统播放器打开直链
+ *   下载：原生 OkHttp 带 Referer 下载到私有目录并调起系统播放器
  */
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useState} from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -22,27 +23,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {gatewayInfo, onLog, startProxyServer} from './server';
-import {DEFAULT_PORT} from './config';
 import {parseShareText} from './resolve';
-import {toBase64} from './utils';
 import {Gateway} from './native';
 
-/** App 内访问本机网关用 127.0.0.1 最稳；局域网地址只用于展示给其他设备 */
-const LOCAL_BASE = `http://127.0.0.1:${DEFAULT_PORT}`;
-
-/**
- * 把直链包成本地代理地址。
- * proxyurl 用 Base64 + encodeURIComponent，避免 & ? + 被查询串截断。
- */
-function buildProxy(raw, mediatype, download = false) {
-  if (!raw) return '';
-  let u =
-    `${LOCAL_BASE}/?proxyurl=${encodeURIComponent(toBase64(raw))}` +
-    `&type=douyin&download=${download ? 'true' : 'false'}`;
-  if (mediatype) u += `&mediatype=${mediatype}`;
-  return u;
-}
+/** 抖音 CDN 防盗链校验的 Referer */
+const REFERER = 'https://www.douyin.com/';
+const IMG_HEADERS = {Referer: REFERER, 'User-Agent': 'Mozilla/5.0'};
 
 const TYPE_LABEL = {
   video: '视频',
@@ -51,38 +37,22 @@ const TYPE_LABEL = {
   unknown: '未知',
 };
 
+function safeName(title, fallback) {
+  const base = (title || '').replace(/[\\/:*?"<>|\r\n#]/g, '_').trim().slice(0, 40);
+  return base || fallback || 'sv-video';
+}
+
 export default function App() {
   const [input, setInput] = useState('');
-  const [running, setRunning] = useState(false);
-  const [lanUrl, setLanUrl] = useState(`http://127.0.0.1:${DEFAULT_PORT}`);
   const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
-  const [logs, setLogs] = useState([]);
   const [toast, setToast] = useState('');
-  const scrollRef = useRef(null);
-
-  useEffect(() => {
-    const off = onLog((line) => setLogs((prev) => [...prev.slice(-99), line]));
-    (async () => {
-      const info = await gatewayInfo();
-      setLanUrl(`http://${info.host}:${DEFAULT_PORT}`);
-      const started = await startProxyServer(DEFAULT_PORT);
-      if (started) {
-        setLanUrl(`http://${started.host}:${DEFAULT_PORT}`);
-        setRunning(true);
-      }
-    })();
-    return off;
-  }, []);
-
-  useEffect(() => {
-    scrollRef.current?.scrollToEnd({animated: true});
-  }, [logs]);
 
   const flash = (msg) => {
     setToast(msg);
-    setTimeout(() => setToast(''), 1800);
+    setTimeout(() => setToast(''), 2000);
   };
 
   const doParse = async (text) => {
@@ -124,34 +94,41 @@ export default function App() {
     flash(label + '已复制');
   };
 
-  const open = async (url) => {
+  /** 播放：把直链交给系统播放器/浏览器 */
+  const play = async (url) => {
     if (!url) return;
     try {
       await Linking.openURL(url);
     } catch (e) {
-      flash('无法打开：' + (e?.message || e));
+      flash('无法打开，试试「下载」');
     }
   };
 
-  const coverProxy = result?.cover ? buildProxy(result.cover, 'image') : '';
-  const videoProxy = result?.url ? buildProxy(result.url, 'video') : '';
-  const videoDownload = result?.url ? buildProxy(result.url, 'video', true) : '';
+  /** 下载：原生带 Referer 拉取，完成后调起系统播放器 */
+  const save = async (url, name, mime) => {
+    if (!url || busy) return;
+    setBusy(true);
+    try {
+      const r = await Gateway.download(url, REFERER, name, mime);
+      flash(`已保存 ${(r.size / 1048576).toFixed(1)} MB，正在打开`);
+    } catch (e) {
+      flash('下载失败：' + (e?.message || String(e)));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const images = result?.images || [];
   const backups = result?.video_backup || [];
   const livePhotos = result?.live_photo || [];
+  const videoName = safeName(result?.title, result?.video_id);
 
   return (
     <SafeAreaView style={s.root}>
       <StatusBar barStyle="light-content" />
       <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
-        <Text style={s.title}>短视频解析 · 代理</Text>
-        <Text style={s.sub}>粘贴抖音分享链接，自动出无水印直链</Text>
-
-        <View style={[s.badge, running ? s.badgeOn : s.badgeOff]}>
-          <Text style={s.badgeText}>
-            {running ? '● 网关运行中' : '○ 网关未启动'}  ·  {lanUrl}
-          </Text>
-        </View>
+        <Text style={s.title}>短视频解析</Text>
+        <Text style={s.sub}>粘贴抖音分享链接，直接出无水印直链</Text>
 
         <View style={s.card}>
           <Text style={s.label}>抖音分享链接 / 整段文案</Text>
@@ -181,7 +158,7 @@ export default function App() {
               )}
             </TouchableOpacity>
           </View>
-          <Text style={s.tip}>支持分享口令里的链接、短链 v.douyin.com、网页版链接</Text>
+          <Text style={s.tip}>支持分享口令、v.douyin.com 短链、网页版链接；视频 / 图集 / 实况</Text>
         </View>
 
         {error ? (
@@ -199,40 +176,41 @@ export default function App() {
               {result.size_label ? <Text style={s.meta}>{result.size_label}</Text> : null}
             </View>
 
-            {result.title ? <Text style={s.resultTitle} numberOfLines={2}>{result.title}</Text> : null}
+            {result.title ? (
+              <Text style={s.resultTitle} numberOfLines={2}>{result.title}</Text>
+            ) : null}
             {result.author?.name ? (
               <Text style={s.author}>@{result.author.name}</Text>
             ) : null}
             {result.publish_time ? <Text style={s.meta}>{result.publish_time}</Text> : null}
 
-            {coverProxy ? (
+            {result.cover ? (
               <Image
                 style={s.cover}
-                source={{uri: coverProxy}}
+                source={{uri: result.cover, headers: IMG_HEADERS}}
                 resizeMode="cover"
               />
             ) : null}
 
             {result.url ? (
               <>
-                <Text style={s.label}>无水印直链（已走本地代理）</Text>
-                <Text style={s.link} numberOfLines={2}>{videoProxy}</Text>
+                <Text style={s.label}>无水印直链</Text>
+                <Text style={s.link} numberOfLines={3}>{result.url}</Text>
                 <View style={s.btnRow}>
-                  <TouchableOpacity style={[s.btn, s.btnPrimary]} onPress={() => open(videoProxy)}>
+                  <TouchableOpacity style={[s.btn, s.btnPrimary]} onPress={() => play(result.url)}>
                     <Text style={s.btnText}>播放</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={[s.btn, s.btnGhost]} onPress={() => open(videoDownload)}>
-                    <Text style={s.btnGhostText}>下载</Text>
+                  <TouchableOpacity
+                    style={[s.btn, s.btnGhost]}
+                    onPress={() => save(result.url, videoName, 'video/mp4')}
+                    disabled={busy}>
+                    <Text style={s.btnGhostText}>{busy ? '下载中…' : '下载'}</Text>
                   </TouchableOpacity>
                 </View>
-                <View style={s.btnRow}>
-                  <TouchableOpacity style={[s.btn, s.btnSmall]} onPress={() => copy(result.url, '直链')}>
-                    <Text style={s.smallText}>复制直链</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[s.btn, s.btnSmall]} onPress={() => copy(videoProxy, '代理链接')}>
-                    <Text style={s.smallText}>复制代理链接</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity style={[s.btn, s.btnSmall]} onPress={() => copy(result.url, '直链')}>
+                  <Text style={s.smallText}>复制直链</Text>
+                </TouchableOpacity>
+                <Text style={s.tip}>播放若被防盗链拦截，用「下载」（带 Referer 拉取）</Text>
               </>
             ) : null}
 
@@ -241,8 +219,13 @@ export default function App() {
                 <Text style={s.label}>图集 {images.length} 张（点击下载）</Text>
                 <ScrollView horizontal style={s.thumbs}>
                   {images.map((u, i) => (
-                    <TouchableOpacity key={i} onPress={() => open(buildProxy(u, 'image', true))}>
-                      <Image style={s.thumb} source={{uri: buildProxy(u, 'image')}} />
+                    <TouchableOpacity
+                      key={i}
+                      onPress={() => save(u, `${videoName}_${i + 1}`, 'image/jpeg')}>
+                      <Image
+                        style={s.thumb}
+                        source={{uri: u, headers: IMG_HEADERS}}
+                      />
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -250,12 +233,12 @@ export default function App() {
             ) : null}
 
             {livePhotos.length ? (
-              <Text style={s.tip}>实况 Live Photo：{livePhotos.length} 组（图片+视频）</Text>
+              <Text style={s.tip}>实况 Live Photo：{livePhotos.length} 组（图片 + 视频）</Text>
             ) : null}
 
             {backups.length ? (
               <View style={s.backupBox}>
-                <Text style={s.label}>备选直链 {backups.length} 条</Text>
+                <Text style={s.label}>备选直链 {backups.length} 条（点击复制）</Text>
                 {backups.slice(0, 3).map((u, i) => (
                   <TouchableOpacity key={i} onPress={() => copy(u, '备选直链')}>
                     <Text style={s.backup} numberOfLines={1}>{u}</Text>
@@ -265,21 +248,16 @@ export default function App() {
             ) : null}
 
             {result.music?.url ? (
-              <TouchableOpacity style={s.musicRow} onPress={() => open(buildProxy(result.music.url, 'video', true))}>
-                <Text style={s.music} numberOfLines={1}>♪ {result.music.title || '背景音乐'} · 点击下载</Text>
+              <TouchableOpacity
+                style={s.musicRow}
+                onPress={() => save(result.music.url, `${videoName}_bgm`, 'audio/mpeg')}>
+                <Text style={s.music} numberOfLines={1}>
+                  ♪ {result.music.title || '背景音乐'} · 点击下载
+                </Text>
               </TouchableOpacity>
             ) : null}
           </View>
         ) : null}
-
-        <View style={s.logCard}>
-          <Text style={s.label}>运行日志</Text>
-          <ScrollView ref={scrollRef} style={s.logBox} nestedScrollEnabled>
-            {logs.map((l, i) => (
-              <Text key={i} style={s.logLine}>{l}</Text>
-            ))}
-          </ScrollView>
-        </View>
 
         <Text style={s.foot}>
           解析逻辑源自 jiuhunwl/short_videos · 抖音解析 Workers 版，MIT
@@ -299,11 +277,7 @@ const s = StyleSheet.create({
   root: {flex: 1, backgroundColor: '#0f1115'},
   container: {padding: 16, paddingBottom: 32},
   title: {color: '#fff', fontSize: 21, fontWeight: '700'},
-  sub: {color: '#8b93a1', fontSize: 13, marginTop: 3, marginBottom: 12},
-  badge: {padding: 8, borderRadius: 8, marginBottom: 12, borderWidth: 1},
-  badgeOn: {backgroundColor: '#0d2b1a', borderColor: '#166534'},
-  badgeOff: {backgroundColor: '#2b1414', borderColor: '#7f1d1d'},
-  badgeText: {color: '#9ca3af', fontSize: 11, fontFamily: 'monospace'},
+  sub: {color: '#8b93a1', fontSize: 13, marginTop: 3, marginBottom: 14},
   card: {
     backgroundColor: '#171b22', borderRadius: 10, padding: 14, marginBottom: 12,
     borderWidth: 1, borderColor: '#2a3038',
@@ -322,7 +296,7 @@ const s = StyleSheet.create({
   btnText: {color: '#fff', fontSize: 14, fontWeight: '600'},
   btnGhostText: {color: '#d1d5db', fontSize: 14, fontWeight: '600'},
   smallText: {color: '#9ca3af', fontSize: 12},
-  tip: {color: '#6b7280', fontSize: 11, marginTop: 4, lineHeight: 16},
+  tip: {color: '#6b7280', fontSize: 11, marginTop: 6, lineHeight: 16},
   errBox: {backgroundColor: '#2b1414', borderRadius: 8, padding: 12, marginBottom: 12},
   errText: {color: '#f87171', fontSize: 13, lineHeight: 19},
   metaRow: {flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 8},
@@ -341,13 +315,8 @@ const s = StyleSheet.create({
   backup: {color: '#6b7280', fontSize: 10, fontFamily: 'monospace', marginBottom: 5},
   musicRow: {marginTop: 10, padding: 10, backgroundColor: '#0f1115', borderRadius: 8},
   music: {color: '#a5b4fc', fontSize: 12},
-  logCard: {backgroundColor: '#171b22', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#2a3038'},
-  logBox: {height: 130, backgroundColor: '#000', borderRadius: 6, padding: 8},
-  logLine: {color: '#9ca3af', fontSize: 10, fontFamily: 'monospace', marginBottom: 2},
   foot: {color: '#4b5563', fontSize: 10, textAlign: 'center', marginTop: 14},
-  toast: {
-    position: 'absolute', bottom: 28, left: 0, right: 0, alignItems: 'center',
-  },
+  toast: {position: 'absolute', bottom: 28, left: 0, right: 0, alignItems: 'center'},
   toastText: {
     color: '#fff', backgroundColor: '#374151', paddingHorizontal: 16,
     paddingVertical: 9, borderRadius: 20, fontSize: 12, overflow: 'hidden',

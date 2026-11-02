@@ -68,8 +68,10 @@ dependencies {
 
     // ReactActivity 继承 AppCompatActivity，AppCompat 主题的资源来自这里
     implementation("androidx.appcompat:appcompat:1.7.0")
+    // FileProvider：下载完成后用 content:// 交给系统播放器
+    implementation("androidx.core:core-ktx:1.13.1")
 
-    // 上游媒体直链请求（流式转发）
+    // 解析请求 + 带 Referer 下载媒体直链
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     if (hermesEnabled.toBoolean()) {

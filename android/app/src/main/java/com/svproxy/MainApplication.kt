@@ -19,7 +19,7 @@ class MainApplication : Application(), ReactApplication {
         object : DefaultReactNativeHost(this) {
             override fun getPackages(): List<ReactPackage> =
                 PackageList(this).packages.apply {
-                    // 本地 HTTP 网关 + 上游请求池
+                    // 解析请求 / 带 Referer 下载 / 剪贴板
                     add(SvProxyPackage())
                 }
 

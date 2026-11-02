@@ -5,8 +5,8 @@
 #   ./scripts/build-bundle.sh            # Hermes 字节码版（默认，与 gradle 打包一致）
 #   ./scripts/build-bundle.sh plain      # 明文 JS 版（可直接文本编辑 / 反查）
 #
-# 明文版要生效，需同时把 android/gradle.properties 的 hermesEnabled 改成 false
-# 然后把产物放进 android/app/src/main/assets/ 再打 APK
+# 产物放在 android/app/src/main/assets/，Gradle 打包时自动合入 APK。
+# 明文 bundle 在 Hermes 下会以解释模式执行，同样可用（无需改 hermesEnabled）。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -26,8 +26,7 @@ npx react-native bundle \
   --sourcemap-output "$ASSETS/index.android.bundle.map"
 
 if [ "$MODE" = "plain" ]; then
-  echo "==> 明文 JS 模式，跳过 Hermes 编译"
-  echo "==> 记得确认 android/gradle.properties: hermesEnabled=false"
+  echo "==> 明文 JS 模式，跳过 Hermes 编译（可文本编辑/替换）"
 else
   HERMES=$(find "$ROOT/node_modules/react-native/sdks/hermesc" -type f -name hermesc 2>/dev/null | head -1)
   if [ -z "$HERMES" ]; then

@@ -1,77 +1,40 @@
 package com.svproxy.proxy
 
-import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import okhttp3.Response
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * 上游请求池。
+ * 解析请求池：发 HTTP 请求并把响应体读成文本。
  *
- * 只发请求、拿状态行和响应头，不把 body 读进内存；
- * body 的 InputStream 以 handleId 形式交给 JS，JS 决定后由网关 pipe 回客户端。
- * followRedirects 关闭 —— 302 跟随策略由 JS 控制（worker.js 的手动跟随逻辑）。
+ * 不再提供媒体流式代理（本地网关已移除），只保留抖音解析所需的请求能力：
+ *   - 短链 302 手动跟随（redirect: manual）
+ *   - 详情接口 JSON 自动跟随
+ *   - 原画地址 302 手动跟随
+ *   - HEAD 探测文件大小
+ * 另外提供带 Referer 的直链下载（OkHttp → app 私有目录），不监听任何端口。
  */
 class UpstreamPool {
-
-    data class Handle(val call: Call, val response: Response)
-
-    private val seq = AtomicInteger(0)
-    private val handles = ConcurrentHashMap<String, Handle>()
 
     private fun baseBuilder() = OkHttpClient.Builder()
         .retryOnConnectionFailure(true)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
 
-    /** 媒体代理用：302 由 JS 手动跟随，保持 Referer */
-    private val client = baseBuilder()
+    /** 手动跟随：解析短链 / 原画 302 时保留 Location */
+    private val manualClient = baseBuilder()
         .followRedirects(false)
         .followSslRedirects(false)
         .build()
 
-    /** 解析用：需要自动跟随短链 302（v.douyin.com → www.douyin.com） */
+    /** 自动跟随：详情接口 / 下载直链 */
     private val followClient = baseBuilder()
         .followRedirects(true)
         .followSslRedirects(true)
         .build()
 
     /**
-     * 发起上游请求
-     * @return Triple(handleId, status, headers)
-     */
-    fun open(url: String, method: String, headers: Map<String, String?>, timeoutMs: Int): Triple<String, Int, Map<String, String>> {
-        val builder = Request.Builder().url(url)
-        headers.forEach { (k, v) -> if (!v.isNullOrEmpty()) builder.header(k, v) }
-
-        val upper = method.uppercase()
-        if (upper == "HEAD" || upper == "GET") {
-            builder.method(upper, null)
-        } else {
-            builder.method(upper, okhttp3.RequestBody.create(null, ByteArray(0)))
-        }
-
-        val call = client.newCall(builder.build())
-        call.timeout().timeout(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
-        val response = call.execute()
-
-        val handleId = "up-${seq.incrementAndGet()}"
-        handles[handleId] = Handle(call, response)
-
-        val out = HashMap<String, String>()
-        for (i in 0 until response.headers.size) {
-            out[response.headers.name(i)] = response.headers.value(i)
-        }
-        return Triple(handleId, response.code, out)
-    }
-
-    /**
-     * 解析用：发请求并把响应体读成字符串返回给 JS（详情接口 JSON / 短链 HTML）。
-     * 与 open() 的区别是这里会消费 body，不保留流句柄。
-     *
      * @return Triple(status, headers, bodyText)
      */
     fun requestText(
@@ -91,7 +54,7 @@ class UpstreamPool {
             builder.method(upper, okhttp3.RequestBody.create(null, ByteArray(0)))
         }
 
-        val http = if (followRedirects) followClient else client
+        val http = if (followRedirects) followClient else manualClient
         val call = http.newCall(builder.build())
         call.timeout().timeout(timeoutMs.toLong(), TimeUnit.MILLISECONDS)
         call.execute().use { response ->
@@ -99,7 +62,6 @@ class UpstreamPool {
             for (i in 0 until response.headers.size) {
                 out[response.headers.name(i)] = response.headers.value(i)
             }
-            // HEAD 无 body；详情 JSON 体积有限，直接读成字符串
             val text = try {
                 response.body?.string() ?: ""
             } catch (e: Exception) {
@@ -109,14 +71,24 @@ class UpstreamPool {
         }
     }
 
-    fun bodyStream(handleId: String) = handles[handleId]?.response?.body?.byteStream()
+    /** 带自定义头下载到指定文件，返回写入字节数 */
+    fun downloadTo(url: String, headers: Map<String, String?>, target: java.io.File): Long {
+        val builder = Request.Builder().url(url).get()
+        headers.forEach { (k, v) -> if (!v.isNullOrEmpty()) builder.header(k, v) }
+        target.parentFile?.mkdirs()
 
-    fun close(handleId: String) {
-        handles.remove(handleId)?.response?.close()
-    }
-
-    fun releaseAll() {
-        handles.values.forEach { runCatching { it.response.close() } }
-        handles.clear()
+        var written = 0L
+        followClient.newCall(builder.build()).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IllegalStateException("HTTP ${response.code}")
+            }
+            val body = response.body ?: throw IllegalStateException("空响应体")
+            body.byteStream().use { input ->
+                java.io.FileOutputStream(target).use { output ->
+                    written = input.copyTo(output, 64 * 1024)
+                }
+            }
+        }
+        return written
     }
 }
