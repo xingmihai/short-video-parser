@@ -52,15 +52,29 @@ npm run bundle plain      # 明文 JS 版（可文本编辑）
 
 - `push` 到 `main` / PR / 手动触发 → 自动构建
 - 打 `v*` 标签 → 额外发布 GitHub Release，附可直接安装的 APK
-- 流程：`npm ci` → 生成 `index.android.bundle`（明文）→ `./gradlew assembleRelease` → 上传产物
+- 流程：`npm ci` → 生成 `index.android.bundle`（明文、已 minify）→ `./gradlew assembleRelease` → 打包上传
 
-产物三件套（Actions → Artifacts，或 Releases 页下载）：
+### 压缩策略（Release 默认全开）
+
+| 层 | 开关 | 效果 |
+|---|---|---|
+| JS bundle | `--dev false --minify true` | 压缩成单行、变量短名、去注释 |
+| Java/Kotlin | `minifyEnabled true` + `proguard-android-optimize.txt` | R8 代码压缩、优化、混淆 |
+| 资源 | `shrinkResources true` | 移除未引用的 res 资源 |
+| native so | `useLegacyPackaging = true` + `extractNativeLibs="true"` | .so 以 deflate 压进 APK，包体明显变小 |
+| 分发 | `zip -9` | 三件套打成 `sv-proxy-android-release.zip` |
+
+`assets/` 下的 `index.android.bundle` 不受 `shrinkResources` 影响，仍可整份替换后重打包。
+配套 keep 规则在 `android/app/proguard-rules.pro`，保护 RN 反射、`@ReactMethod` 与自定义原生模块不被裁掉。
+
+产物（Actions → Artifacts，或 Releases 页下载）：
 
 | 文件 | 说明 |
 |---|---|
 | `sv-proxy-android.apk` | 已签名的 Release 包，直接装 |
-| `index.android.bundle` | 明文 JS，可自行替换后重打包 |
+| `index.android.bundle` | 明文 JS（已 minify），可自行替换后重打包 |
 | `index.android.bundle.map` | sourcemap，定位源码用 |
+| `sv-proxy-android-release.zip` | 三件套打包，deflate -9 |
 
 手动触发：仓库 **Actions → 构建 Android 安装包 → Run workflow**，勾选「同时发布 GitHub Release」即可生成带 APK 直链的版本。
 

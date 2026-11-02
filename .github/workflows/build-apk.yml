@@ -64,13 +64,14 @@ jobs:
       - name: Gradle 缓存
         uses: gradle/actions/setup-gradle@v4
 
-      - name: 生成 index.android.bundle（明文 JS）
+      - name: 生成 index.android.bundle（明文 JS，已压缩）
         run: |
           set -o pipefail
           mkdir -p android/app/src/main/assets
           ./node_modules/.bin/react-native bundle \
             --platform android \
             --dev false \
+            --minify true \
             --entry-file index.js \
             --bundle-output android/app/src/main/assets/index.android.bundle \
             --assets-dest android/app/src/main/res/ \
@@ -104,6 +105,18 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f 2>/dev/null | head -1)
           if [ -n "$APKSIGNER" ]; then "$APKSIGNER" verify --print-certs dist/sv-proxy-android.apk | head -8; fi
 
+      - name: 压缩产物（deflate -9）
+        run: |
+          cd dist
+          zip -9 -q sv-proxy-android-release.zip \
+            sv-proxy-android.apk index.android.bundle index.android.bundle.map
+          cd ..
+          echo "=== 压缩结果 ==="
+          ls -lh dist/
+          echo "APK: $(stat -c %s dist/sv-proxy-android.apk) bytes"
+          echo "ZIP: $(stat -c %s dist/sv-proxy-android-release.zip) bytes"
+          echo "bundle: $(stat -c %s dist/index.android.bundle) bytes"
+
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
@@ -121,13 +134,15 @@ jobs:
           body: |
             Android 安装包，由 GitHub Actions 自动构建。
 
-            - `sv-proxy-android.apk`：已签名，可直接安装
-            - `index.android.bundle`：明文 JS 版，可自行替换后重打包
+            - `sv-proxy-android.apk`：已签名，可直接安装（R8 + 资源压缩 + so deflate）
+            - `index.android.bundle`：明文 JS（已 minify），可自行替换后重打包
             - `index.android.bundle.map`：sourcemap
+            - `sv-proxy-android-release.zip`：三件套打包，deflate -9
 
             App 启动后在 8080 端口提供本地代理网关。
           files: |
             dist/*.apk
+            dist/*.zip
             dist/index.android.bundle
             dist/index.android.bundle.map
           draft: false

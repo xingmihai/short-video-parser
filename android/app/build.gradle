@@ -38,8 +38,21 @@ android {
         release {
             // 统一用 debug 签名，产出可直接安装的 APK（无需额外配置正式签名）
             signingConfig signingConfigs.debug
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+            // R8 代码压缩 + 优化 + 混淆
+            minifyEnabled true
+            // 移除未引用的 res 资源（assets/ 下的 index.android.bundle 不受影响）
+            shrinkResources true
+            proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    packagingOptions {
+        jniLibs {
+            // 把 .so 以 deflate 压进 APK（默认是不压缩存储），包体可小一大截
+            useLegacyPackaging = true
+        }
+        resources {
+            excludes += ['META-INF/*.kotlin_module', 'META-INF/DEPENDENCIES', 'META-INF/LICENSE*', 'META-INF/NOTICE*']
         }
     }
 }
