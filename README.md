@@ -61,8 +61,11 @@ npm run bundle plain      # 明文 JS 版（可文本编辑）
 | JS bundle | `--dev false --minify true` | 压缩成单行、变量短名、去注释 |
 | Java/Kotlin | `minifyEnabled true` + `proguard-android-optimize.txt` | R8 代码压缩、优化、混淆 |
 | 资源 | `shrinkResources true` | 移除未引用的 res 资源 |
-| native so | `useLegacyPackaging = true` + `extractNativeLibs="true"` | .so 以 deflate 压进 APK，包体明显变小 |
+| ABI 裁剪 | `abiFilters 'arm64-v8a','armeabi-v7a'` | 去掉 x86/x86_64 冗余 .so，替代 deflate 压缩的体积收益 |
 | 分发 | `zip -9` | 三件套打成 `sv-proxy-android-release.zip` |
+
+**native .so 必须保持未压缩**：`useLegacyPackaging = false` + `extractNativeLibs="false"`。
+若改成 `true` 把 .so deflate 压进 APK，启动时会报 `dlopen failed: library "libjscexecutor.so" not found` 直接闪退（JSC 引擎依赖 `libjscexecutor.so` + `libjsc.so` 从 APK 内直接加载）。CI 已加校验步骤：检查两个 .so 存在且为 Stored，防止回归。
 
 `assets/` 下的 `index.android.bundle` 不受 `shrinkResources` 影响，仍可整份替换后重打包。
 配套 keep 规则在 `android/app/proguard-rules.pro`，保护 RN 反射、`@ReactMethod` 与自定义原生模块不被裁掉。

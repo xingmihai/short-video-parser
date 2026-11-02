@@ -105,6 +105,26 @@ jobs:
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f 2>/dev/null | head -1)
           if [ -n "$APKSIGNER" ]; then "$APKSIGNER" verify --print-certs dist/sv-proxy-android.apk | head -8; fi
 
+      - name: 校验 APK 内 native 库（防启动闪退回归）
+        run: |
+          python3 - <<'PY'
+          import zipfile, sys
+          z = zipfile.ZipFile('dist/sv-proxy-android.apk')
+          sos = [n for n in z.namelist() if n.startswith('lib/') and n.endswith('.so')]
+          print('APK 内 .so 数量:', len(sos))
+          for key in ('libjscexecutor.so', 'libjsc.so'):
+              hits = [n for n in sos if n.endswith('/' + key)]
+              assert hits, f'❌ {key} 未打进 APK'
+              for h in hits:
+                  info = z.getinfo(h)
+                  assert info.compress_type == zipfile.ZIP_STORED, \
+                      f'❌ {h} 是压缩存储（compress_type={info.compress_type}），会导致 dlopen 失败'
+                  print(f'  ✅ {h}  {info.file_size:,} B  Stored(未压缩)')
+          abis = sorted({n.split('/')[1] for n in sos})
+          print('ABI:', abis)
+          assert 'arm64-v8a' in abis, '❌ 缺少 arm64-v8a'
+          PY
+
       - name: 压缩产物（deflate -9）
         run: |
           cd dist

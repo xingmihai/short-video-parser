@@ -20,6 +20,10 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0.0"
+        // 只保留主流真机 ABI，去掉 x86/x86_64 的冗余 .so（体积收益替代 deflate 压缩）
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a'
+        }
     }
 
     signingConfigs {
@@ -48,8 +52,10 @@ android {
 
     packagingOptions {
         jniLibs {
-            // 把 .so 以 deflate 压进 APK（默认是不压缩存储），包体可小一大截
-            useLegacyPackaging = true
+            // 必须为 false：.so 以未压缩 + 对齐方式存入 APK，
+            // 系统/SoLoader 才能从 base.apk!/lib/<abi>/ 直接 dlopen。
+            // 改成 true 会把 .so deflate 压缩，导致 libjscexecutor.so 加载失败、启动闪退。
+            useLegacyPackaging = false
         }
         resources {
             excludes += ['META-INF/*.kotlin_module', 'META-INF/DEPENDENCIES', 'META-INF/LICENSE*', 'META-INF/NOTICE*']
