@@ -1,10 +1,6 @@
+// 纯 Android 项目：只有 AGP + Kotlin 插件，没有 React Native / Hermes / JS 引擎
 buildscript {
     ext {
-        buildToolsVersion = "34.0.0"
-        minSdkVersion = 24
-        compileSdkVersion = 34
-        targetSdkVersion = 34
-        ndkVersion = "26.1.10909125"
         kotlinVersion = "1.9.24"
     }
     repositories {
@@ -13,9 +9,13 @@ buildscript {
     }
     dependencies {
         classpath("com.android.tools.build:gradle:8.5.0")
-        classpath("com.facebook.react:react-native-gradle-plugin")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
     }
 }
 
-apply plugin: "com.facebook.react.rootproject"
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}

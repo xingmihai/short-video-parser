@@ -1,0 +1,264 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#0f1115"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:paddingBottom="32dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="短视频解析"
+            android:textColor="#ffffff"
+            android:textSize="21sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="3dp"
+            android:layout_marginBottom="14dp"
+            android:text="粘贴抖音分享链接，直接出无水印直链"
+            android:textColor="#8b93a1"
+            android:textSize="13sp" />
+
+        <!-- 输入卡片 -->
+        <LinearLayout style="@style/Card">
+
+            <TextView
+                style="@style/Label"
+                android:text="抖音分享链接 / 整段文案" />
+
+            <EditText
+                android:id="@+id/etInput"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:minHeight="88dp"
+                android:background="@drawable/bg_input"
+                android:gravity="top|start"
+                android:hint="7.79 复制打开抖音，看看 https://v.douyin.com/xxxx/ ..."
+                android:inputType="textMultiLine|textNoSuggestions"
+                android:padding="10dp"
+                android:textColor="#e6e8ec"
+                android:textColorHint="#5b6472"
+                android:textSize="13sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnPaste"
+                    style="@style/BtnGhost"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:text="粘贴并解析" />
+
+                <Space
+                    android:layout_width="8dp"
+                    android:layout_height="1dp" />
+
+                <Button
+                    android:id="@+id/btnParse"
+                    style="@style/BtnPrimary"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:text="解 析" />
+            </LinearLayout>
+
+            <TextView
+                style="@style/Tip"
+                android:text="支持分享口令、v.douyin.com 短链、网页版链接；视频 / 图集 / 实况" />
+
+            <ProgressBar
+                android:id="@+id/progress"
+                style="?android:attr/progressBarStyleSmall"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="8dp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvError"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/bg_error"
+            android:padding="12dp"
+            android:textColor="#f87171"
+            android:textSize="13sp"
+            android:visibility="gone" />
+
+        <!-- 结果 -->
+        <LinearLayout
+            android:id="@+id/resultRoot"
+            style="@style/Card"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvType"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_tag"
+                    android:paddingLeft="8dp"
+                    android:paddingTop="3dp"
+                    android:paddingRight="8dp"
+                    android:paddingBottom="3dp"
+                    android:textColor="#ffffff"
+                    android:textSize="11sp" />
+
+                <TextView
+                    android:id="@+id/tvMeta"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginLeft="8dp"
+                    android:textColor="#9ca3af"
+                    android:textSize="11sp" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:maxLines="2"
+                android:textColor="#e6e8ec"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvAuthor"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="#60a5fa"
+                android:textSize="12sp" />
+
+            <TextView
+                android:id="@+id/tvPublish"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:textColor="#9ca3af"
+                android:textSize="11sp" />
+
+            <ImageView
+                android:id="@+id/ivCover"
+                android:layout_width="match_parent"
+                android:layout_height="190dp"
+                android:background="#000000"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tvUrlLabel"
+                style="@style/Label"
+                android:layout_marginTop="12dp"
+                android:text="无水印直链" />
+
+            <TextView
+                android:id="@+id/tvUrl"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:fontFamily="monospace"
+                android:maxLines="3"
+                android:textColor="#a5b4fc"
+                android:textSize="10sp" />
+
+            <LinearLayout
+                android:id="@+id/btnPlayRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/btnPlay"
+                    style="@style/BtnPrimary"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:text="播放" />
+
+                <Space
+                    android:layout_width="8dp"
+                    android:layout_height="1dp" />
+
+                <Button
+                    android:id="@+id/btnDownload"
+                    style="@style/BtnGhost"
+                    android:layout_width="0dp"
+                    android:layout_weight="1"
+                    android:text="下载" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnCopy"
+                style="@style/BtnSmall"
+                android:layout_width="match_parent"
+                android:layout_marginTop="8dp"
+                android:text="复制直链" />
+
+            <TextView
+                style="@style/Tip"
+                android:text="播放若被防盗链拦截，用「下载」（带 Referer 拉取）" />
+
+            <HorizontalScrollView
+                android:id="@+id/hsThumbs"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:id="@+id/llThumbs"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+
+            <TextView
+                android:id="@+id/tvLive"
+                style="@style/Tip"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/tvBackup"
+                style="@style/Label"
+                android:layout_marginTop="10dp"
+                android:text="备选直链"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btnMusic"
+                style="@style/BtnSmall"
+                android:layout_width="match_parent"
+                android:layout_marginTop="10dp"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:gravity="center"
+            android:text="纯 Kotlin · 无 JS 引擎 · 解析逻辑源自 jiuhunwl/short_videos (MIT)"
+            android:textColor="#4b5563"
+            android:textSize="10sp" />
+    </LinearLayout>
+</ScrollView>

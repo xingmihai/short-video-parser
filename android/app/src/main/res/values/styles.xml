@@ -1,9 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- ReactActivity 继承 AppCompatActivity，主题必须是 Theme.AppCompat 系或后代。
-         用平台主题 android:Theme.Material.* 会在 setContentView 时抛
-         IllegalStateException: You need to use a Theme.AppCompat theme -->
-    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
-        <item name="android:windowBackground">@android:color/black</item>
-        <item name="android:windowNoTitle">true</item>
+    <!-- 纯平台主题：Activity 是 android.app.Activity，不继承 AppCompatActivity，
+         不需要 AppCompat 依赖，也不会触发 "You need to use a Theme.AppCompat theme" -->
+    <style name="AppTheme" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:colorAccent">@color/accent</item>
+        <item name="android:textColorPrimary">@color/text</item>
+    </style>
+
+    <style name="Card">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:background">@drawable/bg_card</item>
+        <item name="android:padding">14dp</item>
+        <item name="android:layout_marginBottom">12dp</item>
+    </style>
+
+    <style name="Label">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginBottom">8dp</item>
+        <item name="android:textColor">#8b93a1</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
+    <style name="Tip">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginTop">6dp</item>
+        <item name="android:textColor">#6b7280</item>
+        <item name="android:textSize">11sp</item>
+    </style>
+
+    <style name="BtnBase">
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:minHeight">44dp</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:allCaps">false</item>
+    </style>
+
+    <style name="BtnPrimary" parent="BtnBase">
+        <item name="android:background">@drawable/bg_btn_primary</item>
+        <item name="android:textColor">#ffffff</item>
+    </style>
+
+    <style name="BtnGhost" parent="BtnBase">
+        <item name="android:background">@drawable/bg_btn_ghost</item>
+        <item name="android:textColor">#d1d5db</item>
+    </style>
+
+    <style name="BtnSmall" parent="BtnBase">
+        <item name="android:background">@drawable/bg_btn_ghost</item>
+        <item name="android:textColor">#9ca3af</item>
+        <item name="android:textSize">12sp</item>
+        <item name="android:minHeight">36dp</item>
     </style>
 </resources>

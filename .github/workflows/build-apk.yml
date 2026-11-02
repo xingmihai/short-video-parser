@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       create_release:
-        description: '同时发布 GitHub Release（附 APK 与 bundle）'
+        description: '同时发布 GitHub Release'
         type: boolean
         default: false
 
@@ -30,12 +30,6 @@ jobs:
       - name: 检出代码
         uses: actions/checkout@v4
 
-      - name: Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-
       - name: JDK 17
         uses: actions/setup-java@v5
         with:
@@ -44,7 +38,7 @@ jobs:
 
       - name: 准备 Android SDK
         run: |
-          SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          SDK_ROOT="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
           mkdir -p "$SDK_ROOT/licenses"
           printf '\n8933bad161af4178b1185d1a37fbf41ea5269c55\nd56f5187479451eabf01fb78af6dfcb131a6481e\n' \
             > "$SDK_ROOT/licenses/android-sdk-license"
@@ -54,34 +48,12 @@ jobs:
             yes | "$SDKMGR" --licenses > /dev/null || true
             "$SDKMGR" "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null || true
           else
-            echo "sdkmanager 未找到，交由 Android Gradle Plugin 自动下载所需组件"
+            echo "sdkmanager 未找到，交由 AGP 自动下载所需组件"
           fi
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
 
-      - name: 安装 JS 依赖
-        run: npm ci --no-audit --no-fund
-
       - name: Gradle 缓存
         uses: gradle/actions/setup-gradle@v4
-
-      - name: 生成 sourcemap（不落明文 bundle）
-        run: |
-          set -o pipefail
-          mkdir -p dist android/app/src/main/res
-          # 明文 JS 只作为 hermesc 的输入落在临时目录，用完立即删除；
-          # 发布产物的 index.android.bundle 全部从 APK 内抽取字节码。
-          ./node_modules/.bin/react-native bundle \
-            --platform android \
-            --dev false \
-            --minify true \
-            --entry-file index.js \
-            --bundle-output /tmp/sv-plain.js.bundle \
-            --assets-dest android/app/src/main/res/ \
-            --sourcemap-output dist/index.android.bundle.map \
-            2>&1 | tee /tmp/bundle.log
-          rm -f /tmp/sv-plain.js.bundle
-          echo "=== 中间明文已清理，dist 现状 ==="
-          ls -lh dist/
 
       - name: 编译 Release APK
         working-directory: android
@@ -90,46 +62,23 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
 
-      - name: 整理产物 + 校验无明文
+      - name: 整理产物 + 校验纯 Kotlin
         run: |
           set -o pipefail
           mkdir -p dist
-          cp android/app/build/outputs/apk/release/*.apk dist/sv-proxy-android.apk
-          # 从 APK 内抽出 Hermes 字节码，断言不是可读 JS；顺带清理 sourcemap 里的源码正文
-          python3 scripts/prepare-release.py dist/sv-proxy-android.apk dist 2>&1 | tee /tmp/bundlecheck.log
+          cp android/app/build/outputs/apk/release/*.apk dist/sv-douyin.apk
+          python3 scripts/check-no-bundle.py dist/sv-douyin.apk 2>&1 | tee /tmp/nobundle.log
           echo "=== 产物 ==="
           ls -lh dist/
           echo "=== APK 签名校验 ==="
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f 2>/dev/null | head -1)
-          if [ -n "$APKSIGNER" ]; then "$APKSIGNER" verify --print-certs dist/sv-proxy-android.apk | head -8; fi
-          echo "=== bundle 文件类型 ==="
-          file dist/index.android.bundle || true
-          python3 -c "
-          d=open('dist/index.android.bundle','rb').read(200)
-          print('前 200 字节可打印字符数:', sum(1 for b in d if 32<=b<=126 or b in (9,10,13)), '/ 200')
-          "
-
-      - name: 校验 APK 内 native 库（防启动闪退回归）
-        run: |
-          set -o pipefail
-          python3 scripts/check-apk-libs.py dist/sv-proxy-android.apk 2>&1 | tee /tmp/nativecheck.log
-
-      - name: 压缩产物（deflate -9）
-        run: |
-          cd dist
-          zip -9 -q sv-proxy-android-release.zip \
-            sv-proxy-android.apk index.android.bundle index.android.bundle.map
-          cd ..
-          echo "=== 压缩结果 ==="
-          ls -lh dist/
-          echo "APK: $(stat -c %s dist/sv-proxy-android.apk) bytes"
-          echo "ZIP: $(stat -c %s dist/sv-proxy-android-release.zip) bytes"
-          echo "bundle: $(stat -c %s dist/index.android.bundle) bytes"
+          if [ -n "$APKSIGNER" ]; then "$APKSIGNER" verify --print-certs dist/sv-douyin.apk | head -8; fi
+          echo "APK: $(stat -c %s dist/sv-douyin.apk) bytes"
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: sv-proxy-android-apk-${{ github.run_number }}
+          name: sv-douyin-apk-${{ github.run_number }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
@@ -138,31 +87,19 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') || inputs.create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v1.0.0-build{0}', github.run_number) }}
-          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('sv-proxy-android build {0}', github.run_number) }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v2.0.0-build{0}', github.run_number) }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('sv-douyin build {0}', github.run_number) }}
           body: |
-            Android 安装包，由 GitHub Actions 自动构建。
+            纯 Kotlin 版安装包，由 GitHub Actions 自动构建。
 
-            - `sv-proxy-android.apk`：已签名，可直接安装（R8 + 资源压缩 + ABI 裁剪，Hermes 引擎）
-            - `index.android.bundle`：Hermes 字节码（HBC），直接取自 APK 内 assets/，非明文 JS
-            - `index.android.bundle.map`：sourcemap，已剥离 sourcesContent（不含源码正文）
-            - `sv-proxy-android-release.zip`：三件套打包，deflate -9
+            - `sv-douyin.apk`：已签名，直接安装（R8 + 资源压缩）
+            - **无 React Native、无 Hermes/JSC、无 index.android.bundle、无 JS 资产**
+            - 解析逻辑：OkHttp + org.json，全部编译进 classes.dex
 
-            CI 会断言 bundle 是二进制字节码，出现可读 JS 文本即构建失败。
-
-            启动修复：SoLoader 使用 RN 0.76 的 OpenSourceMergedSoMapping 完成合并库映射
-            （hermes_executor → libhermestooling.so）；Activity 主题改为 Theme.AppCompat 系；
-            native .so 保持 Stored 未压缩。
-            CI 有 check-apk-libs.py 同时校验映射配置、AppCompat 主题与 APK 内 .so。
-
-            用法：抖音「分享 → 复制链接」→ 打开 App → 粘贴并解析 → 播放/下载。
-            无本地网关、不监听端口；解析逻辑全在 index.android.bundle 内，
-            下载由原生 OkHttp 带 Referer 完成，无需服务器。
-          files: |
-            dist/*.apk
-            dist/*.zip
-            dist/index.android.bundle
-            dist/index.android.bundle.map
+            用法：抖音「分享 → 复制链接」→ 打开 App → 粘贴并解析 → 播放 / 下载。
+            下载由原生 OkHttp 带 Referer 完成，不监听端口、无需服务器。
+            CI 会断言 APK 内不存在任何 bundle / JS 引擎 .so。
+          files: dist/sv-douyin.apk
           draft: false
           prerelease: false
 
@@ -173,10 +110,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p ci-debug
-          cp /tmp/bundle.log ci-debug/bundle.log 2>/dev/null || true
           cp /tmp/gradle.log ci-debug/gradle.log 2>/dev/null || true
-          cp /tmp/nativecheck.log ci-debug/nativecheck.log 2>/dev/null || true
-          cp /tmp/bundlecheck.log ci-debug/bundlecheck.log 2>/dev/null || true
+          cp /tmp/nobundle.log ci-debug/nobundle.log 2>/dev/null || true
           git config user.name "ci-bot"
           git config user.email "ci-bot@users.noreply.github.com"
           git add -f ci-debug/ || true

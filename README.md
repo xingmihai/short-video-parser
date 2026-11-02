@@ -1,10 +1,27 @@
-# sv-proxy-android
+# sv-douyin（纯 Kotlin 版）
 
 **在 App 里粘贴抖音分享链接，直接出无水印直链并播放 / 下载。**
 
-不用服务器、不用 Cloudflare 账号、**不用本地网关**——不监听端口、不转发请求、没有 `8080` 和局域网地址。整个解析链路都在 `index.android.bundle` 里。
+**没有 React Native、没有 Hermes / JSC、没有 `index.android.bundle`、没有任何 `.js` / `.hbc` 资产。** 全部逻辑编译进 `classes.dex`，APK 里连一个原生 `.so` 都没有。
 
-解析逻辑源自 [jiuhunwl/short_videos](https://github.com/jiuhunwl/short_videos) 的 `api/douyin-cloudflare workers/workers.js`（抖音分享链接解析，原作者 JH-Ahua，MIT）。
+解析逻辑移植自 [jiuhunwl/short_videos](https://github.com/jiuhunwl/short_videos) 的 `api/douyin-cloudflare workers/workers.js`（原作者 JH-Ahua，MIT）。
+
+---
+
+## 为什么改成纯 Kotlin
+
+之前的版本把解析 Worker 塞进 `index.android.bundle`（先是明文 JS，后来编成 Hermes 字节码）。但解析本身只是：正则提 URL、手动跟 302、解析详情 JSON、拼字段——没有一样需要 JS 引擎。删掉 RN 之后：
+
+| | RN 版 v1.3.0 | 纯 Kotlin v2.0.0 |
+|---|---|---|
+| JS 引擎 | Hermes（多个 `.so`） | 无 |
+| `index.android.bundle` | HBC 字节码 | **不存在** |
+| 依赖 | react-android / Hermes / SoLoader / appcompat | OkHttp + androidx.core |
+| 主题坑 | 必须 AppCompat + 合并库映射 | 平台 `Theme.Material`，无坑 |
+| 产物 | APK 20.70 MB | 显著更小 |
+| 改逻辑 | 改 JS → 打 bundle → 塞 APK | 改 Kotlin → 直接编译 |
+
+CI 里的 `scripts/check-no-bundle.py` 会断言 APK 内不存在任何 `*.bundle` / `*.hbc` / `*.js` / `*.map` 资产、不存在 Hermes/JSC 的 `.so`、`lib/` 为空，出现即构建失败。
 
 ---
 
@@ -13,29 +30,28 @@
 1. 抖音点「分享 → 复制链接」
 2. 打开 App，点 **「粘贴并解析」**（自动读剪贴板），或把整段分享文案粘进输入框点「解析」
 3. 结果页显示标题、作者、封面、画质 / 时长 / 大小，以及**无水印直链**
-4. 点 **播放**（系统播放器）/ **下载** / **复制直链**；图集、实况、备选直链、BGM 也一并列出
+4. 点 **播放**（系统播放器）/ **下载** / **复制直链**；图集、实况、备选直链、BGM 一并列出
 
-支持：分享口令里的链接、`v.douyin.com` 短链、`www.douyin.com/video/...` 网页版链接；视频、图集、Live Photo 实况。
+支持：分享口令里的链接、`v.douyin.com` 短链、`www.douyin.com/video/...` 网页链接；视频、图集、Live Photo 实况。
 
 ---
 
-## 没有网关之后，能力怎么落地
+## 实现
 
-| 原来（本地 8080 网关） | 现在 |
+| 文件 | 作用 |
 |---|---|
-| `HttpGateway.kt` 监听端口、接收 HTTP 请求 | 已删除 |
-| `src/proxy.js` 代理 CDN 直链、注入 Referer | 已删除 |
-| `src/server.js` 事件路由 / `src/config.js` 端口配置 | 已删除 |
-| 播放地址是 `http://127.0.0.1:8080/?proxyurl=...` | 直接用解析出的 CDN 直链 |
+| `android/app/src/main/java/com/svproxy/DouyinResolver.kt` | 解析核心：短链 302、详情接口、原画 302、画质选取、图集/实况、HEAD 探测 |
+| `android/app/src/main/java/com/svproxy/MainActivity.kt` | 单 Activity 界面，输入 → 解析 → 渲染 |
+| `android/app/src/main/java/com/svproxy/Media.kt` | 带 Referer 下载 + 异步加载封面/图集 |
+| `android/app/src/main/res/layout/activity_main.xml` | 界面布局 |
+| `scripts/check-no-bundle.py` | 构建期断言「零 JS 资产」 |
 
-替代方式（都不需要监听端口）：
-
-- **封面 / 图集**：RN `Image` 的 `source.headers` 直接带 `Referer: https://www.douyin.com/`
-- **播放**：`Linking.openURL(直链)` 交给系统播放器 / 浏览器
-- **下载**：原生 `Gateway.download()` 用 OkHttp 带 `Referer` + UA 拉流，写入 App 私有外部目录，再通过 `FileProvider` 生成 `content://` 调起系统播放器。这条最稳，能绕开 CDN 防盗链 403
-- **解析阶段**：`Gateway.requestText()` 用 OkHttp 发请求，支持手动跟 302 拿 `Location`、自动跟 302 拿详情 JSON，不受浏览器 CORS 限制
-
-原生现在只剩四件事：发解析请求、带 Referer 下载、读剪贴板、写剪贴板。业务与界面全在 `index.android.bundle`（Hermes 字节码），改逻辑改 `src/` 源码再重新打包即可，不用动 Kotlin，也不用碰 APK 里的二进制文件。
+- 网络：OkHttp 4.12（手动 / 自动跟随 302 双 client）
+- JSON：`org.json`（Android 内置，无第三方库）
+- 图片：OkHttp + `BitmapFactory`，不引 Glide/Coil
+- 下载：写入 `Android/data/com.svproxy/files/Download/sv/`，`FileProvider` 生成 `content://` 调起系统播放器
+- 封面 / 图集请求带 `Referer: https://www.douyin.com/`，绕开防盗链
+- Activity 是 `android.app.Activity` + 平台 `Theme.Material.NoActionBar`，**不依赖 AppCompat**
 
 ---
 
@@ -43,44 +59,12 @@
 
 ```bash
 git clone https://github.com/xingmihai/sv-proxy-android.git
-cd sv-proxy-android
-npm install
-npx react-native run-android      # 手机/模拟器连着 adb
+cd sv-proxy-android/android
+./gradlew assembleRelease
+# 产物：app/build/outputs/apk/release/app-release.apk
 ```
 
-### 只重新打 bundle
-
-```bash
-npm run bundle
-```
-
-产物是 **Hermes 字节码（HBC）**，不是明文 JS。脚本把 minify 后的 JS 放在临时目录作为 `hermesc` 输入，编译完立即删除，**不产出、不留存任何明文 bundle**。
-
-`android/gradle.properties` 默认 `hermesEnabled=true`（RN 0.76 官方默认）。`MainApplication.kt` 必须用 `SoLoader.init(this, OpenSourceMergedSoMapping)`，详见下方「启动闪退根因」。
-
-要改逻辑：改 `src/` 下的源码 → 重新 `npm run bundle` / 重新构建 APK。字节码不可直接文本编辑；直接往 APK 里塞明文 JS 也不会被当作 HBC 加载。
-
----
-
-## 目录
-
-```
-index.js                 入口，注册 App
-src/
-  App.js                 主界面：粘贴 → 解析 → 播放 / 下载
-  resolve.js             ★ 抖音分享链接解析（解析 Worker 移植）
-  native.js              原生桥：requestText / download / 剪贴板
-  utils.js               headerGet 等纯 JS 工具
-android/app/src/main/
-  AndroidManifest.xml    INTERNET + FileProvider
-  res/xml/file_paths.xml FileProvider 路径
-  java/com/svproxy/
-    MainActivity.kt / MainApplication.kt
-    proxy/UpstreamPool.kt   OkHttp 请求池（解析 + 带 Referer 下载）
-    proxy/SvProxyModule.kt  JS 可见的 SvProxyGateway
-    proxy/SvProxyPackage.kt 模块注册
-scripts/check-apk-libs.py 构建期静态校验
-```
+或用 Android Studio 打开 `android/` 目录直接 Run。
 
 ---
 
@@ -88,69 +72,18 @@ scripts/check-apk-libs.py 构建期静态校验
 
 `.github/workflows/build-apk.yml`：push `main` / PR / 手动触发 → 构建；打 `v*` 标签 → 发布 GitHub Release。
 
-流程：`npm ci` → 生成 sourcemap（明文 JS 仅作临时输入、即用即删）→ `./gradlew assembleRelease`（Gradle 调 `hermesc` 把字节码打进 APK）→ 从 APK 内抽出字节码并断言非明文 → 静态校验 → 打包上传。
+流程：JDK 17 → Android SDK 34 → `./gradlew assembleRelease` → `check-no-bundle.py` 断言零 JS 资产 → 签名校验 → 上传 / 发布。
 
-**明文零落地**：CI 里明文 JS 只写在 `/tmp/sv-plain.js.bundle`，用完 `rm`；Release 里的 `index.android.bundle` 是 `scripts/prepare-release.py` 直接从 APK `assets/` 抽出的 HBC。`index.android.bundle.map` 会剥掉 `sourcesContent`，不夹带源码正文。`prepare-release.py` 会断言产物是二进制，出现可读 JS 文本直接让构建失败。
-
-### 压缩策略（Release 默认全开）
-
-| 层 | 开关 | 效果 |
-|---|---|---|
-| JS bundle | `--dev false --minify true` + `hermesc -emit-binary -O` | 先 minify 再编成 HBC 字节码，产物二进制、不可读 |
-| Java/Kotlin | `minifyEnabled true` + `proguard-android-optimize.txt` | R8 代码压缩、优化、混淆 |
-| 资源 | `shrinkResources true` | 移除未引用的 res 资源 |
-| ABI 裁剪 | `abiFilters 'arm64-v8a','armeabi-v7a'` | 去掉 x86/x86_64 冗余 .so |
-| 分发 | `zip -9` | 三件套打成 `sv-proxy-android-release.zip` |
-
-### 启动闪退根因（RN 0.76 Native Library Merging）
-
-RN 0.76 把一批 JNI 库合并进少数物理 `.so`，逻辑库名不再等于文件名：
-
-| 代码里 loadLibrary 的名字 | 实际映射到 |
-|---|---|
-| `hermes_executor` / `hermesinstancejni` | `libhermestooling.so` |
-| `jscexecutor` / `jscruntime` / `jscinstance` | `libjsctooling.so` |
-| `reactnativejni` / `fabricjni` / `yoga` … | `libreactnative.so` |
-
-沿用 RN ≤0.75 的 `SoLoader.init(this, false)` 会直接 `dlopen` 独立库 → 找不到 → 启动即 `UnsatisfiedLinkError`。修法：
-
-```kotlin
-import com.facebook.react.soloader.OpenSourceMergedSoMapping
-// ...
-SoLoader.init(this, OpenSourceMergedSoMapping)
-```
-
-### 启动闪退根因之二：Activity 主题
-
-`ReactActivity` 继承 `AppCompatActivity`，主题 parent 必须是 `Theme.AppCompat` 系。用 `android:Theme.Material.*` 会在 `setContentView` 抛 `IllegalStateException`。修法：
-
-```xml
-<style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
-```
-
-并显式依赖 `androidx.appcompat:appcompat`。
-
-**native .so 必须保持未压缩**：`useLegacyPackaging = false` + `extractNativeLibs="false"`，否则系统无法从 `base.apk!/lib/<abi>/` 直接 dlopen。
-
-`scripts/check-apk-libs.py` 构建期统一校验：SoLoader mapping、AppCompat 主题、APK 内 `.so` 全部 Stored、存在 JS 引擎库 + tooling 合并目标库 + `libreactnative.so`、含 arm64-v8a。这类问题编译不会报错，只能靠静态校验拦住。
-
-产物（Actions → Artifacts 或 Releases 页）：
-
-| 文件 | 内容 |
-|---|---|
-| `sv-proxy-android.apk` | 已签名，直接装 |
-| `index.android.bundle` | Hermes 字节码 HBC，从 APK 内抽出，非明文 |
-| `index.android.bundle.map` | sourcemap，已剥离 `sourcesContent` |
-| `sv-proxy-android-release.zip` | 三件套打包，deflate -9 |
+Release 只有一个文件：`sv-douyin.apk`。
 
 ---
 
 ## 几点提示
 
-- 解析依赖抖音免 Cookie 详情接口，平台改接口或加签名时会返回失败，App 会直接显示错误码与原因，不会白屏。
+- 解析依赖抖音免 Cookie 详情接口（`api.amemv.com`），平台改接口或加签名时会返回失败，App 会显示错误码与原因，不会白屏。
 - 直链带 `x-expires`，过期返回 404，实时解析即时使用，别缓存直链。
-- 下载的文件在 `Android/data/com.svproxy/files/Download/sv/`，用「下载」按钮会顺带调起系统播放器打开。
-- `assets/index.android.bundle` 是 Hermes 字节码，`shrinkResources` 不会动它；要换内容请改源码重新构建，别直接塞文本。
+- 播放若被 CDN 防盗链拦截，点「下载」——那条走 OkHttp 带 Referer 拉取，最稳。
+- 想加平台（快手、微博等）：在 `DouyinResolver.kt` 里加对应的 host 识别与详情解析分支即可，界面不用动。
 
 ---
 

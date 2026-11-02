@@ -1,29 +1,16 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
-apply plugin: "com.facebook.react"
-
-react {
-    autolinkLibrariesWithApp()
-}
-
-def jscFlavor = 'org.webkit:android-jsc:+'
 
 android {
-    ndkVersion rootProject.ext.ndkVersion
-    buildToolsVersion rootProject.ext.buildToolsVersion
-    compileSdk rootProject.ext.compileSdkVersion
-
     namespace "com.svproxy"
+    compileSdk 34
+
     defaultConfig {
         applicationId "com.svproxy"
-        minSdkVersion rootProject.ext.minSdkVersion
-        targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
-        // 只保留主流真机 ABI，去掉 x86/x86_64 的冗余 .so（体积收益替代 deflate 压缩）
-        ndk {
-            abiFilters 'arm64-v8a', 'armeabi-v7a'
-        }
+        minSdk 24
+        targetSdk 34
+        versionCode 2
+        versionName "2.0.0"
     }
 
     signingConfigs {
@@ -36,47 +23,38 @@ android {
     }
 
     buildTypes {
-        debug {
-            signingConfig signingConfigs.debug
-        }
         release {
-            // 统一用 debug 签名，产出可直接安装的 APK（无需额外配置正式签名）
+            // 用仓库内 debug.keystore 签名，产出可直接安装的 APK
             signingConfig signingConfigs.debug
-            // R8 代码压缩 + 优化 + 混淆
             minifyEnabled true
-            // 移除未引用的 res 资源（assets/ 下的 index.android.bundle 不受影响）
             shrinkResources true
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
         }
     }
 
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
     packagingOptions {
-        jniLibs {
-            // 必须为 false：.so 以未压缩 + 对齐方式存入 APK，
-            // 系统/SoLoader 才能从 base.apk!/lib/<abi>/ 直接 dlopen。
-            // 改成 true 会把 .so deflate 压缩，导致 libjscexecutor.so 加载失败、启动闪退。
-            useLegacyPackaging = false
-        }
         resources {
-            excludes += ['META-INF/*.kotlin_module', 'META-INF/DEPENDENCIES', 'META-INF/LICENSE*', 'META-INF/NOTICE*']
+            excludes += [
+                'META-INF/*.kotlin_module',
+                'META-INF/DEPENDENCIES',
+                'META-INF/LICENSE*',
+                'META-INF/NOTICE*',
+            ]
         }
     }
 }
 
 dependencies {
-    implementation("com.facebook.react:react-android")
-
-    // ReactActivity 继承 AppCompatActivity，AppCompat 主题的资源来自这里
-    implementation("androidx.appcompat:appcompat:1.7.0")
-    // FileProvider：下载完成后用 content:// 交给系统播放器
-    implementation("androidx.core:core-ktx:1.13.1")
-
-    // 解析请求 + 带 Referer 下载媒体直链
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-
-    if (hermesEnabled.toBoolean()) {
-        implementation("com.facebook.react:hermes-android")
-    } else {
-        implementation jscFlavor
-    }
+    // FileProvider：下载后用 content:// 交给系统播放器
+    implementation("androidx.core:core-ktx:1.13.1")
 }
