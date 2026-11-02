@@ -6,7 +6,7 @@
     "android": "react-native run-android",
     "start": "react-native start",
     "bundle": "./scripts/build-bundle.sh",
-    "bundle:plain": "react-native bundle --platform android --dev false --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res --sourcemap-output android/app/src/main/assets/index.android.bundle.map"
+    "bundle:plain": "react-native bundle --platform android --dev false --minify true --entry-file index.js --bundle-output android/app/src/main/assets/index.android.bundle --assets-dest android/app/src/main/res --sourcemap-output android/app/src/main/assets/index.android.bundle.map"
   },
   "dependencies": {
     "react": "18.3.1",

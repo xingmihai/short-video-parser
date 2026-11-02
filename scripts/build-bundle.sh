@@ -19,6 +19,7 @@ echo "==> 打包 JS → index.android.bundle"
 npx react-native bundle \
   --platform android \
   --dev false \
+  --minify true \
   --entry-file index.js \
   --bundle-output "$ASSETS/index.android.bundle" \
   --assets-dest "$ROOT/android/app/src/main/res" \
