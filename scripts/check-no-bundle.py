@@ -48,9 +48,13 @@ def main(apk_path: str) -> int:
         key = n.split("/")[0] if "/" in n else n.split(".")[-1][:12]
         groups[key] += i.compress_size
 
+    dex_bytes = sum(infos[n].file_size for n in dex)
+    res_count = sum(1 for n in names if n.startswith("res/"))
+
     print(f"APK: {apk_path}")
     print(f"条目数: {len(names)}  未压缩总计: {total:,} B  APK 内占用: {compressed:,} B")
-    print(f"classes*.dex: {len(dex)} 个")
+    print(f"classes*.dex: {len(dex)} 个，未压缩合计 {dex_bytes:,} B")
+    print(f"res/ 资源条目: {res_count}")
     print("体积构成（按顶层目录，compress_size）:")
     for k, v in groups.most_common(10):
         print(f"  {k:20} {v / 1048576:>7.2f} MB")
@@ -58,6 +62,14 @@ def main(apk_path: str) -> int:
     problems = []
     if not dex:
         problems.append("未找到 classes.dex，产物不是有效的 Android 应用")
+    if dex_bytes < 100_000:
+        problems.append(
+            f"classes.dex 只有 {dex_bytes:,} B，疑似 R8 裁空或产物不完整"
+        )
+    if "AndroidManifest.xml" not in names:
+        problems.append("未找到 AndroidManifest.xml")
+    if res_count == 0:
+        problems.append("未找到任何 res/ 资源，界面资源可能被误裁")
     if js_assets:
         problems.append(f"发现 JS/bundle 资产: {js_assets[:10]}")
     if js_sos:
