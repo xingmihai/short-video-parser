@@ -42,7 +42,9 @@ npm run bundle            # Hermes 字节码版
 npm run bundle plain      # 明文 JS 版（可文本编辑）
 ```
 
-明文版要生效，需把 `android/gradle.properties` 里的 `hermesEnabled` 改成 `false`（仓库默认已是 `false`）。
+`android/gradle.properties` 默认 `hermesEnabled=true`（RN 0.76 官方路径）。**不要改成 `false`**：旧架构 + JSC 会加载已不存在的 `libjscexecutor.so`，启动必崩。
+
+关于「替换 bundle」：Gradle 打包时会用 `hermesc` 把 APK 内的 bundle 编译成字节码，但 Release 里附带的是**明文 JS 版** `index.android.bundle`。把明文替换进 APK 后，Hermes 会以解释模式执行它，功能一致、启动略慢，仍可直接文本修改。
 
 ---
 
@@ -65,7 +67,11 @@ npm run bundle plain      # 明文 JS 版（可文本编辑）
 | 分发 | `zip -9` | 三件套打成 `sv-proxy-android-release.zip` |
 
 **native .so 必须保持未压缩**：`useLegacyPackaging = false` + `extractNativeLibs="false"`。
-若改成 `true` 把 .so deflate 压进 APK，启动时会报 `dlopen failed: library "libjscexecutor.so" not found` 直接闪退（JSC 引擎依赖 `libjscexecutor.so` + `libjsc.so` 从 APK 内直接加载）。CI 已加校验步骤：检查两个 .so 存在且为 Stored，防止回归。
+若改成 `true` 把 .so deflate 压进 APK，系统/SoLoader 无法从 `base.apk!/lib/<abi>/` 直接 dlopen。
+
+**JS 引擎必须是 Hermes**（`hermesEnabled=true`）。设成 JSC 时，旧架构的 `JSCExecutor` 会 `System.loadLibrary("jscexecutor")`，而 RN 0.76 的 `react-android` AAR 已不含 `libjscexecutor.so`，启动即 `UnsatisfiedLinkError` 闪退。
+
+CI 有 `scripts/check-apk-libs.py` 校验：打印 APK 内全部 .so，断言均为 Stored、存在 JS 引擎库、含 arm64-v8a；若走 JSC 还额外要求 `libjscexecutor.so`。从构建侧堵住这类回归。
 
 `assets/` 下的 `index.android.bundle` 不受 `shrinkResources` 影响，仍可整份替换后重打包。
 配套 keep 规则在 `android/app/proguard-rules.pro`，保护 RN 反射、`@ReactMethod` 与自定义原生模块不被裁掉。

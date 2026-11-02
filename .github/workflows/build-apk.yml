@@ -139,10 +139,12 @@ jobs:
           body: |
             Android 安装包，由 GitHub Actions 自动构建。
 
-            - `sv-proxy-android.apk`：已签名，可直接安装（R8 + 资源压缩 + so deflate）
-            - `index.android.bundle`：明文 JS（已 minify），可自行替换后重打包
+            - `sv-proxy-android.apk`：已签名，可直接安装（R8 + 资源压缩 + ABI 裁剪，Hermes 引擎）
+            - `index.android.bundle`：明文 JS（已 minify），可自行替换后重打包（Hermes 解释执行）
             - `index.android.bundle.map`：sourcemap
             - `sv-proxy-android-release.zip`：三件套打包，deflate -9
+
+            native .so 保持 Stored 未压缩，并由 CI 校验，避免启动 dlopen 失败。
 
             App 启动后在 8080 端口提供本地代理网关。
           files: |
