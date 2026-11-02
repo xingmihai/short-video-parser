@@ -64,25 +64,24 @@ jobs:
       - name: Gradle 缓存
         uses: gradle/actions/setup-gradle@v4
 
-      - name: 生成 index.android.bundle（明文 JS，已压缩）
+      - name: 生成 sourcemap（不落明文 bundle）
         run: |
           set -o pipefail
-          mkdir -p android/app/src/main/assets
+          mkdir -p dist android/app/src/main/res
+          # 明文 JS 只作为 hermesc 的输入落在临时目录，用完立即删除；
+          # 发布产物的 index.android.bundle 全部从 APK 内抽取字节码。
           ./node_modules/.bin/react-native bundle \
             --platform android \
             --dev false \
             --minify true \
             --entry-file index.js \
-            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --bundle-output /tmp/sv-plain.js.bundle \
             --assets-dest android/app/src/main/res/ \
-            --sourcemap-output android/app/src/main/assets/index.android.bundle.map \
+            --sourcemap-output dist/index.android.bundle.map \
             2>&1 | tee /tmp/bundle.log
-          ls -lh android/app/src/main/assets/index.android.bundle
-          mkdir -p dist
-          cp android/app/src/main/assets/index.android.bundle dist/index.android.bundle
-          cp android/app/src/main/assets/index.android.bundle.map dist/index.android.bundle.map
-          # 移除源码目录副本，避免与 Gradle 生成的同名 asset 重复
-          rm -f android/app/src/main/assets/index.android.bundle android/app/src/main/assets/index.android.bundle.map
+          rm -f /tmp/sv-plain.js.bundle
+          echo "=== 中间明文已清理，dist 现状 ==="
+          ls -lh dist/
 
       - name: 编译 Release APK
         working-directory: android
@@ -91,19 +90,24 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
 
-      - name: 整理产物
+      - name: 整理产物 + 校验无明文
         run: |
+          set -o pipefail
           mkdir -p dist
           cp android/app/build/outputs/apk/release/*.apk dist/sv-proxy-android.apk
-          if [ ! -f dist/index.android.bundle ]; then
-            B=$(find android/app/build -name index.android.bundle -type f 2>/dev/null | head -1)
-            [ -n "$B" ] && cp "$B" dist/index.android.bundle
-          fi
+          # 从 APK 内抽出 Hermes 字节码，断言不是可读 JS；顺带清理 sourcemap 里的源码正文
+          python3 scripts/prepare-release.py dist/sv-proxy-android.apk dist 2>&1 | tee /tmp/bundlecheck.log
           echo "=== 产物 ==="
           ls -lh dist/
           echo "=== APK 签名校验 ==="
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f 2>/dev/null | head -1)
           if [ -n "$APKSIGNER" ]; then "$APKSIGNER" verify --print-certs dist/sv-proxy-android.apk | head -8; fi
+          echo "=== bundle 文件类型 ==="
+          file dist/index.android.bundle || true
+          python3 -c "
+          d=open('dist/index.android.bundle','rb').read(200)
+          print('前 200 字节可打印字符数:', sum(1 for b in d if 32<=b<=126 or b in (9,10,13)), '/ 200')
+          "
 
       - name: 校验 APK 内 native 库（防启动闪退回归）
         run: |
@@ -140,9 +144,11 @@ jobs:
             Android 安装包，由 GitHub Actions 自动构建。
 
             - `sv-proxy-android.apk`：已签名，可直接安装（R8 + 资源压缩 + ABI 裁剪，Hermes 引擎）
-            - `index.android.bundle`：明文 JS（已 minify），可自行替换后重打包（Hermes 解释执行）
-            - `index.android.bundle.map`：sourcemap
+            - `index.android.bundle`：Hermes 字节码（HBC），直接取自 APK 内 assets/，非明文 JS
+            - `index.android.bundle.map`：sourcemap，已剥离 sourcesContent（不含源码正文）
             - `sv-proxy-android-release.zip`：三件套打包，deflate -9
+
+            CI 会断言 bundle 是二进制字节码，出现可读 JS 文本即构建失败。
 
             启动修复：SoLoader 使用 RN 0.76 的 OpenSourceMergedSoMapping 完成合并库映射
             （hermes_executor → libhermestooling.so）；Activity 主题改为 Theme.AppCompat 系；
@@ -170,6 +176,7 @@ jobs:
           cp /tmp/bundle.log ci-debug/bundle.log 2>/dev/null || true
           cp /tmp/gradle.log ci-debug/gradle.log 2>/dev/null || true
           cp /tmp/nativecheck.log ci-debug/nativecheck.log 2>/dev/null || true
+          cp /tmp/bundlecheck.log ci-debug/bundlecheck.log 2>/dev/null || true
           git config user.name "ci-bot"
           git config user.email "ci-bot@users.noreply.github.com"
           git add -f ci-debug/ || true

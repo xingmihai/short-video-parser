@@ -1,46 +1,47 @@
 #!/usr/bin/env bash
-# 生成 index.android.bundle
+# 生成 index.android.bundle —— Hermes 字节码（HBC）
 #
 # 用法：
-#   ./scripts/build-bundle.sh            # Hermes 字节码版（默认，与 gradle 打包一致）
-#   ./scripts/build-bundle.sh plain      # 明文 JS 版（可直接文本编辑 / 反查）
+#   ./scripts/build-bundle.sh
 #
-# 产物放在 android/app/src/main/assets/，Gradle 打包时自动合入 APK。
-# 明文 bundle 在 Hermes 下会以解释模式执行，同样可用（无需改 hermesEnabled）。
+# 明文 JS 只作为 hermesc 的输入落在临时目录，编译完立即删除；
+# 产物 android/app/src/main/assets/index.android.bundle 是二进制字节码，
+# 不可直接文本编辑。要改逻辑请改 src/ 下的源码后重新运行本脚本。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ASSETS="$ROOT/android/app/src/main/assets"
-MODE="${1:-hermes}"
+TMP="$ROOT/.bundle-tmp"
 
-mkdir -p "$ASSETS"
+mkdir -p "$ASSETS" "$TMP"
 
-echo "==> 打包 JS → index.android.bundle"
+echo "==> 打包 JS → 临时明文（minify）"
 npx react-native bundle \
   --platform android \
   --dev false \
   --minify true \
   --entry-file index.js \
-  --bundle-output "$ASSETS/index.android.bundle" \
+  --bundle-output "$TMP/plain.js.bundle" \
   --assets-dest "$ROOT/android/app/src/main/res" \
   --sourcemap-output "$ASSETS/index.android.bundle.map"
 
-if [ "$MODE" = "plain" ]; then
-  echo "==> 明文 JS 模式，跳过 Hermes 编译（可文本编辑/替换）"
-else
-  HERMES=$(find "$ROOT/node_modules/react-native/sdks/hermesc" -type f -name hermesc 2>/dev/null | head -1)
-  if [ -z "$HERMES" ]; then
-    HERMES=$(command -v hermesc || true)
-  fi
-  if [ -n "$HERMES" ]; then
-    echo "==> Hermes 编译：index.android.bundle → index.android.bundle.hbc"
-    "$HERMES" -emit-binary -out "$ASSETS/index.android.bundle.hbc" "$ASSETS/index.android.bundle" -O
-    mv "$ASSETS/index.android.bundle.hbc" "$ASSETS/index.android.bundle"
-    echo "==> 已替换为字节码 bundle（体积更小、启动更快，但不可文本编辑）"
-  else
-    echo "==> 未找到 hermesc，保留明文 bundle"
-  fi
+HERMESC=$(find "$ROOT/node_modules/react-native/sdks/hermesc" -type f -name hermesc 2>/dev/null | head -1)
+if [ -z "$HERMESC" ]; then
+  HERMESC=$(command -v hermesc || true)
 fi
 
+if [ -z "$HERMESC" ]; then
+  echo "❌ 未找到 hermesc，无法生成字节码；已删除临时明文，未产出 bundle" >&2
+  rm -rf "$TMP"
+  exit 1
+fi
+
+echo "==> Hermes 编译 → index.android.bundle（HBC）"
+"$HERMESC" -emit-binary -O \
+  -out "$ASSETS/index.android.bundle" "$TMP/plain.js.bundle"
+
+rm -rf "$TMP"
+echo "==> 临时明文已删除"
 echo "==> 完成：$ASSETS/index.android.bundle"
+file "$ASSETS/index.android.bundle" || true
 ls -lh "$ASSETS/index.android.bundle"

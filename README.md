@@ -35,7 +35,7 @@
 - **下载**：原生 `Gateway.download()` 用 OkHttp 带 `Referer` + UA 拉流，写入 App 私有外部目录，再通过 `FileProvider` 生成 `content://` 调起系统播放器。这条最稳，能绕开 CDN 防盗链 403
 - **解析阶段**：`Gateway.requestText()` 用 OkHttp 发请求，支持手动跟 302 拿 `Location`、自动跟 302 拿详情 JSON，不受浏览器 CORS 限制
 
-原生现在只剩四件事：发解析请求、带 Referer 下载、读剪贴板、写剪贴板。业务与界面全在 `index.android.bundle`，改逻辑只需改 JS 重新打包，不用动 Kotlin。
+原生现在只剩四件事：发解析请求、带 Referer 下载、读剪贴板、写剪贴板。业务与界面全在 `index.android.bundle`（Hermes 字节码），改逻辑改 `src/` 源码再重新打包即可，不用动 Kotlin，也不用碰 APK 里的二进制文件。
 
 ---
 
@@ -51,13 +51,14 @@ npx react-native run-android      # 手机/模拟器连着 adb
 ### 只重新打 bundle
 
 ```bash
-npm run bundle            # Hermes 字节码版
-npm run bundle plain      # 明文 JS 版（可文本编辑）
+npm run bundle
 ```
 
-`android/gradle.properties` 默认 `hermesEnabled=true`（RN 0.76 官方默认）。无论选哪个引擎，`MainApplication.kt` 都必须用 `SoLoader.init(this, OpenSourceMergedSoMapping)`，详见下方「启动闪退根因」。
+产物是 **Hermes 字节码（HBC）**，不是明文 JS。脚本把 minify 后的 JS 放在临时目录作为 `hermesc` 输入，编译完立即删除，**不产出、不留存任何明文 bundle**。
 
-关于「替换 bundle」：Gradle 打包时会用 `hermesc` 把 APK 内的 bundle 编译成字节码，但 Release 里附带的是**明文 JS 版** `index.android.bundle`。把明文替换进 APK 后，Hermes 会以解释模式执行它，功能一致、启动略慢，仍可直接文本修改。
+`android/gradle.properties` 默认 `hermesEnabled=true`（RN 0.76 官方默认）。`MainApplication.kt` 必须用 `SoLoader.init(this, OpenSourceMergedSoMapping)`，详见下方「启动闪退根因」。
+
+要改逻辑：改 `src/` 下的源码 → 重新 `npm run bundle` / 重新构建 APK。字节码不可直接文本编辑；直接往 APK 里塞明文 JS 也不会被当作 HBC 加载。
 
 ---
 
@@ -87,13 +88,15 @@ scripts/check-apk-libs.py 构建期静态校验
 
 `.github/workflows/build-apk.yml`：push `main` / PR / 手动触发 → 构建；打 `v*` 标签 → 发布 GitHub Release。
 
-流程：`npm ci` → 生成 `index.android.bundle`（明文、已 minify）→ `./gradlew assembleRelease` → 静态校验 → 打包上传。
+流程：`npm ci` → 生成 sourcemap（明文 JS 仅作临时输入、即用即删）→ `./gradlew assembleRelease`（Gradle 调 `hermesc` 把字节码打进 APK）→ 从 APK 内抽出字节码并断言非明文 → 静态校验 → 打包上传。
+
+**明文零落地**：CI 里明文 JS 只写在 `/tmp/sv-plain.js.bundle`，用完 `rm`；Release 里的 `index.android.bundle` 是 `scripts/prepare-release.py` 直接从 APK `assets/` 抽出的 HBC。`index.android.bundle.map` 会剥掉 `sourcesContent`，不夹带源码正文。`prepare-release.py` 会断言产物是二进制，出现可读 JS 文本直接让构建失败。
 
 ### 压缩策略（Release 默认全开）
 
 | 层 | 开关 | 效果 |
 |---|---|---|
-| JS bundle | `--dev false --minify true` | 压缩成单行、变量短名、去注释 |
+| JS bundle | `--dev false --minify true` + `hermesc -emit-binary -O` | 先 minify 再编成 HBC 字节码，产物二进制、不可读 |
 | Java/Kotlin | `minifyEnabled true` + `proguard-android-optimize.txt` | R8 代码压缩、优化、混淆 |
 | 资源 | `shrinkResources true` | 移除未引用的 res 资源 |
 | ABI 裁剪 | `abiFilters 'arm64-v8a','armeabi-v7a'` | 去掉 x86/x86_64 冗余 .so |
@@ -131,7 +134,14 @@ SoLoader.init(this, OpenSourceMergedSoMapping)
 
 `scripts/check-apk-libs.py` 构建期统一校验：SoLoader mapping、AppCompat 主题、APK 内 `.so` 全部 Stored、存在 JS 引擎库 + tooling 合并目标库 + `libreactnative.so`、含 arm64-v8a。这类问题编译不会报错，只能靠静态校验拦住。
 
-产物（Actions → Artifacts 或 Releases 页）：`sv-proxy-android.apk`（已签名，直接装）、`index.android.bundle`、`index.android.bundle.map`、`sv-proxy-android-release.zip`。
+产物（Actions → Artifacts 或 Releases 页）：
+
+| 文件 | 内容 |
+|---|---|
+| `sv-proxy-android.apk` | 已签名，直接装 |
+| `index.android.bundle` | Hermes 字节码 HBC，从 APK 内抽出，非明文 |
+| `index.android.bundle.map` | sourcemap，已剥离 `sourcesContent` |
+| `sv-proxy-android-release.zip` | 三件套打包，deflate -9 |
 
 ---
 
@@ -140,7 +150,7 @@ SoLoader.init(this, OpenSourceMergedSoMapping)
 - 解析依赖抖音免 Cookie 详情接口，平台改接口或加签名时会返回失败，App 会直接显示错误码与原因，不会白屏。
 - 直链带 `x-expires`，过期返回 404，实时解析即时使用，别缓存直链。
 - 下载的文件在 `Android/data/com.svproxy/files/Download/sv/`，用「下载」按钮会顺带调起系统播放器打开。
-- `assets/` 下的 `index.android.bundle` 不受 `shrinkResources` 影响，仍可整份替换后重打包。
+- `assets/index.android.bundle` 是 Hermes 字节码，`shrinkResources` 不会动它；要换内容请改源码重新构建，别直接塞文本。
 
 ---
 
