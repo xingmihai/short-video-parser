@@ -149,7 +149,8 @@ jobs:
             native .so 保持 Stored 未压缩。
             CI 有 check-apk-libs.py 同时校验映射配置、AppCompat 主题与 APK 内 .so。
 
-            App 启动后在 8080 端口提供本地代理网关。
+            用法：抖音「分享 → 复制链接」→ 打开 App → 粘贴并解析 → 播放/下载。
+            解析与代理逻辑全部在 index.android.bundle 内，无需服务器。
           files: |
             dist/*.apk
             dist/*.zip

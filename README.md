@@ -1,12 +1,33 @@
 # sv-proxy-android
 
-把 Cloudflare Worker [`cf_sv_proxy/worker.js`](https://github.com/jiuhunwl/short_videos/blob/main/cf_sv_proxy/worker.js) **搬进 Android App**：短视频（抖音/微博）直链 403 防盗链代理，核心逻辑写在 **JS 层，打进 `index.android.bundle`**，不用服务器、不用 Cloudflare 账号。
+**在 App 里粘贴抖音分享链接，直接出无水印直链并播放/下载。** 不用服务器、不用 Cloudflare 账号、不用自己拼 CDN 地址。
 
-App 启动后在本机 `8080` 端口起一个 HTTP 网关，手机自己或同一局域网内的设备直接访问：
+把 [jiuhunwl/short_videos](https://github.com/jiuhunwl/short_videos) 的两个 Worker 都搬进了 `index.android.bundle`：
+
+| 原仓库 Worker | 本项目 |
+|---|---|
+| `api/douyin-cloudflare workers/workers.js`（解析分享链接） | `src/resolve.js` |
+| `cf_sv_proxy/worker.js`（直链 403 防盗链代理） | `src/proxy.js` + `HttpGateway.kt` |
+
+完整链路全在 App 内：
 
 ```
-http://手机IP:8080/?proxyurl=<直链Base64>&type=douyin&mediatype=video&download=false
+粘贴分享文案 → 提取短链 → 跟随 302 → 详情接口拿 vid
+→ 原画 302 直链 → 本地网关注入 Referer 代理 → 播放 / 下载
 ```
+
+解析走原生 OkHttp（`requestText`），不受浏览器 CORS 限制；播放/下载走本机 `8080` 网关，解决 CDN 防盗链 403。App 同时保留网关供局域网其他设备直接调用。
+
+---
+
+## App 里怎么用
+
+1. 在抖音点「分享 → 复制链接」
+2. 打开本 App，点 **「粘贴并解析」**（自动读剪贴板），或直接把整段分享文案粘进输入框点「解析」
+3. 结果页显示标题、作者、封面、画质/时长/大小，以及**已经过本地代理的无水印直链**
+4. 点 **播放**（系统播放器）/ **下载** / **复制直链** / **复制代理链接**；图集、实况、备选直链、BGM 也一并列出
+
+支持：分享口令里的链接、`v.douyin.com` 短链、`www.douyin.com/video/...` 网页链接；视频、图集、Live Photo 实况。
 
 ---
 
@@ -20,7 +41,7 @@ http://手机IP:8080/?proxyurl=<直链Base64>&type=douyin&mediatype=video&downlo
 | `return new Response(stream)` | JS 把上游 body 的 `handleId` 交回原生，`pipeStream` 流式写回 socket |
 | `crypto.subtle` / `atob` | 原生 `sha256` / `src/utils.js` 手写 Base64 解码 |
 
-**边界很清楚**：原生只干三件 JS 干不了的活——监听端口、发上游请求但不读 body、把流 pipe 回 socket。参数解析、URL 解码、白名单、Referer 注入、302 跟随、错误码，**全在 JS 里**，也就是全在 `index.android.bundle` 里。改逻辑只需改 JS 重新打包，不用动 Kotlin。
+**边界很清楚**：原生只干四件 JS 干不了的活——监听端口、发上游请求但不读 body、发解析请求读回文本、把流 pipe 回 socket。分享链接解析、URL 解码、白名单、Referer 注入、302 跟随、错误码、界面，**全在 JS 里**，也就是全在 `index.android.bundle` 里。改逻辑只需改 JS 重新打包，不用动 Kotlin。
 
 ---
 
@@ -33,7 +54,7 @@ npm install
 npx react-native run-android      # 手机/模拟器连着 adb
 ```
 
-App 打开即自动启动网关，首页显示 `http://192.168.x.x:8080`。
+App 打开即自动启动网关；顶部显示局域网地址 `http://192.168.x.x:8080`（给其他设备用），App 内部访问走 `127.0.0.1`。
 
 ### 只重新打 bundle（不重编译原生）
 
@@ -168,15 +189,16 @@ curl -L -o v.mp4 "http://192.168.1.20:8080/?proxyurl=aHR0cHM6Ly9hd2VtZS5zbnNzZGs
 index.js                 入口，注册 App + 全局 __svProxy
 src/
   config.js              常量（UA、超时、白名单、平台/媒体预设）
-  utils.js               Base64 解码、白名单校验、扩展名推断
+  utils.js               Base64 编解码、白名单校验、扩展名推断
   native.js              原生桥接封装
-  proxy.js               ★ 代理核心，worker.js 的移植
+  resolve.js             ★ 抖音分享链接解析（解析 Worker 移植）
+  proxy.js               ★ 直链代理核心（cf_sv_proxy Worker 移植）
   server.js              事件路由：原生请求 → handleRequest
-  App.js                 控制台界面（地址、启停、日志）
+  App.js                 主界面：粘贴分享链接 → 解析 → 播放/下载
 android/app/src/main/java/com/svproxy/
   MainActivity.kt / MainApplication.kt
   proxy/HttpGateway.kt   极简 HTTP/1.1 服务器
-  proxy/UpstreamPool.kt  OkHttp 上游请求池（不读 body）
+  proxy/UpstreamPool.kt  OkHttp 请求池（流式句柄 + 解析文本响应）
   proxy/SvProxyModule.kt JS 可见的 SvProxyGateway
 ```
 
@@ -201,4 +223,4 @@ android/app/src/main/java/com/svproxy/
 
 ---
 
-代码逻辑源自 [jiuhunwl/short_videos](https://github.com/jiuhunwl/short_videos) 的 `cf_sv_proxy/worker.js`，原作者 JH-Ahua。License: MIT。
+代码逻辑源自 [jiuhunwl/short_videos](https://github.com/jiuhunwl/short_videos) 的 `cf_sv_proxy/worker.js` 与 `api/douyin-cloudflare workers/workers.js`，原作者 JH-Ahua（www.jiuhunwl.cn）。License: MIT。

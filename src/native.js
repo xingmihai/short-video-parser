@@ -1,10 +1,11 @@
 /**
  * 原生桥接封装：所有能力由 android/app/src/main/java/com/svproxy/proxy 提供
  *
- * 原生只做三件"JS 干不了/干不好"的事：
+ * 原生只做四件"JS 干不了/干不好"的事：
  *   1. 监听 TCP 端口，收 HTTP 请求（HttpGateway.kt）
  *   2. 发上游请求但不读 body（UpstreamPool.kt，OkHttp，followRedirects=false）
- *   3. 把上游响应流 pipe 回客户端 socket（零拷贝、不落盘、不占 JS 内存）
+ *   3. 发解析请求并把响应体读成文本（短链 302 / 详情 JSON，绕开浏览器 CORS）
+ *   4. 把上游响应流 pipe 回客户端 socket（零拷贝、不落盘、不占 JS 内存）
  * 其余所有决策逻辑都在 JS 里，即都在 index.android.bundle 里。
  */
 
@@ -35,6 +36,21 @@ export const Gateway = {
       ? Native.openUpstream(url, method || 'GET', headers || {}, timeoutMs || 30000)
       : Promise.reject(new Error('no native')),
 
+  /**
+   * 解析用：发请求并读回文本响应（不受 CORS 限制）
+   * @returns Promise<{status: number, headers: object, body: string}>
+   */
+  requestText: (url, method, headers, timeoutMs, followRedirects) =>
+    Native
+      ? Native.requestText(
+          url,
+          method || 'GET',
+          headers || {},
+          timeoutMs || 20000,
+          followRedirects !== false,
+        )
+      : Promise.reject(new Error('no native')),
+
   /** 把 handleId 对应的上游响应流，以指定状态/头回写给客户端 */
   pipeToClient: (requestId, status, headers, handleId) =>
     Native && Native.pipeToClient(requestId, status, headers || {}, handleId),
@@ -48,6 +64,12 @@ export const Gateway = {
 
   /** SHA-256（原生 MessageDigest），用于生成下载文件名 */
   sha256: (text) => (Native ? Native.sha256(text) : Promise.resolve(String(Date.now()))),
+
+  /** 复制到系统剪贴板 */
+  copyText: (text) => (Native ? Native.copyText(text) : Promise.resolve(false)),
+
+  /** 读取剪贴板（一键粘贴抖音分享文案） */
+  readText: () => (Native ? Native.readText() : Promise.resolve('')),
 };
 
 /** 请求事件与状态事件监听 */

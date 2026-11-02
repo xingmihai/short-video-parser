@@ -1,10 +1,12 @@
 /**
  * sv-proxy-android — React Native 入口
  *
- * 对应 Cloudflare Worker 版 cf_sv_proxy/worker.js 的 `export default { fetch }`。
- * 这里不是"收到 HTTP 请求再处理"，而是：
- *   原生 HTTP 网关（Kotlin）收到请求 → 通过事件把请求交给 JS → JS 走完整代理逻辑 → 回写响应
- * 逻辑全部在本文件与 src/ 下，最终被打进 index.android.bundle。
+ * 把原仓库两个 Worker 都搬进 index.android.bundle：
+ *   src/resolve.js  抖音分享链接解析（解析 Worker 移植）
+ *   src/proxy.js    直链 403 防盗链代理（cf_sv_proxy Worker 移植）
+ *
+ * App 内：粘贴分享文案 → 解析出无水印直链 → 交给本地网关代理 → 播放/下载
+ * 网关侧：原生 HTTP 网关收到请求 → 事件交给 JS → 走完整代理逻辑 → 回写响应
  */
 
 import {AppRegistry} from 'react-native';

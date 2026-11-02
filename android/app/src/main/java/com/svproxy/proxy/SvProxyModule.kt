@@ -126,6 +126,37 @@ class SvProxyModule(private val reactContext: ReactApplicationContext) :
         }
     }
 
+    /**
+     * 解析用：发 HTTP 请求并把响应体读成文本交给 JS（不受浏览器 CORS 限制）。
+     * 抖音短链跟随、详情接口 JSON 都走这里。
+     */
+    @ReactMethod
+    fun requestText(
+        url: String,
+        method: String,
+        headers: ReadableMap,
+        timeoutMs: Int,
+        followRedirects: Boolean,
+        promise: Promise,
+    ) {
+        pool.submit {
+            try {
+                val map = headers.toHashMap().mapValues { it.value?.toString() }
+                val (status, respHeaders, body) =
+                    upstream.requestText(url, method, map, timeoutMs, followRedirects)
+                promise.resolve(Arguments.createMap().apply {
+                    putInt("status", status)
+                    putString("body", body)
+                    putMap("headers", Arguments.createMap().apply {
+                        respHeaders.forEach { (k, v) -> putString(k, v) }
+                    })
+                })
+            } catch (e: Exception) {
+                promise.reject("REQUEST_FAILED", e.message ?: "请求失败", e)
+            }
+        }
+    }
+
     @ReactMethod
     fun pipeToClient(requestId: String, status: Int, headers: ReadableMap, handleId: String) {
         pool.submit {
@@ -151,6 +182,39 @@ class SvProxyModule(private val reactContext: ReactApplicationContext) :
         pool.submit {
             val digest = MessageDigest.getInstance("SHA-256").digest(text.toByteArray(Charsets.UTF_8))
             promise.resolve(digest.joinToString("") { "%02x".format(it) })
+        }
+    }
+
+    /** 复制文本到系统剪贴板（App 内「复制直链 / 复制代理链接」） */
+    @ReactMethod
+    fun copyText(text: String, promise: Promise) {
+        reactContext.runOnUiQueueThread {
+            try {
+                val cm = reactContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                    as android.content.ClipboardManager
+                cm.setPrimaryClip(android.content.ClipData.newPlainText("sv-proxy", text))
+                promise.resolve(true)
+            } catch (e: Exception) {
+                promise.reject("CLIPBOARD_FAILED", e.message, e)
+            }
+        }
+    }
+
+    /** 读取剪贴板文本：用户从抖音复制分享文案后，App 内一键「粘贴并解析」 */
+    @ReactMethod
+    fun readText(promise: Promise) {
+        reactContext.runOnUiQueueThread {
+            try {
+                val cm = reactContext.getSystemService(android.content.Context.CLIPBOARD_SERVICE)
+                    as android.content.ClipboardManager
+                val clip = cm.primaryClip
+                val text = if (clip != null && clip.itemCount > 0) {
+                    clip.getItemAt(0).text?.toString() ?: ""
+                } else ""
+                promise.resolve(text)
+            } catch (e: Exception) {
+                promise.resolve("")
+            }
         }
     }
 
