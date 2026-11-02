@@ -144,7 +144,9 @@ jobs:
             - `index.android.bundle.map`：sourcemap
             - `sv-proxy-android-release.zip`：三件套打包，deflate -9
 
-            native .so 保持 Stored 未压缩，并由 CI 校验，避免启动 dlopen 失败。
+            启动修复：SoLoader 使用 RN 0.76 的 OpenSourceMergedSoMapping 完成合并库映射
+            （hermes_executor → libhermestooling.so），native .so 保持 Stored 未压缩。
+            CI 有 check-apk-libs.py 同时校验映射配置与 APK 内 .so，防止启动闪退回归。
 
             App 启动后在 8080 端口提供本地代理网关。
           files: |

@@ -2,6 +2,7 @@ package com.svproxy
 
 import android.app.Application
 import com.facebook.soloader.SoLoader
+import com.facebook.react.soloader.OpenSourceMergedSoMapping
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
@@ -35,7 +36,11 @@ class MainApplication : Application(), ReactApplication {
 
     override fun onCreate() {
         super.onCreate()
-        SoLoader.init(this, false)
+        // RN 0.76 起启用了 Native Library Merging：
+        // hermes_executor / jscexecutor / reactnativejni 等逻辑库名不再对应独立 .so，
+        // 必须传入 OpenSourceMergedSoMapping 才能映射到 libhermestooling.so / libjsctooling.so
+        // / libreactnative.so。沿用 RN ≤0.75 的「两参数 boolean 重载」会 dlopen 独立库失败而闪退。
+        SoLoader.init(this, OpenSourceMergedSoMapping)
         if (BuildConfig.IS_NEW_ARCHITECTURE_ENABLED) {
             load()
         }

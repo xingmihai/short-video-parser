@@ -42,7 +42,7 @@ npm run bundle            # Hermes 字节码版
 npm run bundle plain      # 明文 JS 版（可文本编辑）
 ```
 
-`android/gradle.properties` 默认 `hermesEnabled=true`（RN 0.76 官方路径）。**不要改成 `false`**：旧架构 + JSC 会加载已不存在的 `libjscexecutor.so`，启动必崩。
+`android/gradle.properties` 默认 `hermesEnabled=true`（RN 0.76 官方默认）。JSC 也能用；但无论选哪个引擎，`MainApplication.kt` 都必须用 `SoLoader.init(this, OpenSourceMergedSoMapping)`，详见下方「启动闪退根因」。
 
 关于「替换 bundle」：Gradle 打包时会用 `hermesc` 把 APK 内的 bundle 编译成字节码，但 Release 里附带的是**明文 JS 版** `index.android.bundle`。把明文替换进 APK 后，Hermes 会以解释模式执行它，功能一致、启动略慢，仍可直接文本修改。
 
@@ -69,9 +69,37 @@ npm run bundle plain      # 明文 JS 版（可文本编辑）
 **native .so 必须保持未压缩**：`useLegacyPackaging = false` + `extractNativeLibs="false"`。
 若改成 `true` 把 .so deflate 压进 APK，系统/SoLoader 无法从 `base.apk!/lib/<abi>/` 直接 dlopen。
 
-**JS 引擎必须是 Hermes**（`hermesEnabled=true`）。设成 JSC 时，旧架构的 `JSCExecutor` 会 `System.loadLibrary("jscexecutor")`，而 RN 0.76 的 `react-android` AAR 已不含 `libjscexecutor.so`，启动即 `UnsatisfiedLinkError` 闪退。
+### 启动闪退根因（RN 0.76 Native Library Merging）
 
-CI 有 `scripts/check-apk-libs.py` 校验：打印 APK 内全部 .so，断言均为 Stored、存在 JS 引擎库、含 arm64-v8a；若走 JSC 还额外要求 `libjscexecutor.so`。从构建侧堵住这类回归。
+RN 0.76 把一批 JNI 库合并进少数物理 `.so`，逻辑库名不再等于文件名：
+
+| 代码里 loadLibrary 的名字 | 实际映射到 |
+|---|---|
+| `hermes_executor` / `hermesinstancejni` | `libhermestooling.so` |
+| `jscexecutor` / `jscruntime` / `jscinstance` | `libjsctooling.so` |
+| `reactnativejni` / `fabricjni` / `yoga` … | `libreactnative.so` |
+
+映射表在 `com.facebook.react.soloader.OpenSourceMergedSoMapping`。**如果沿用 RN ≤0.75 的 `SoLoader.init(this, false)`，SoLoader 不做映射，会直接 `dlopen("libhermes_executor.so")` / `dlopen("libjscexecutor.so")` → 找不到 → 启动即 `UnsatisfiedLinkError`**。
+
+logcat 里的两种报错其实是同一个根因：
+
+```
+Load libhermes.so ... ok
+Load libhermes_executor.so ... dlopen failed: library "libhermes_executor.so" not found
+at com.facebook.hermes.reactexecutor.HermesExecutor.<clinit>
+```
+
+跟 bundle、网络、代理逻辑、so 是否压缩都无关 —— `libhermes.so` 已经加载成功了，死在下一步的 executor 库名映射。
+
+修法只有一行：
+
+```kotlin
+import com.facebook.react.soloader.OpenSourceMergedSoMapping
+// ...
+SoLoader.init(this, OpenSourceMergedSoMapping)
+```
+
+`scripts/check-apk-libs.py` 会同时校验源码里传入了 mapping、APK 内 `.so` 全部 Stored、存在 JS 引擎库 + tooling 合并目标库 + `libreactnative.so`、含 arm64-v8a，从构建侧堵住回归。
 
 `assets/` 下的 `index.android.bundle` 不受 `shrinkResources` 影响，仍可整份替换后重打包。
 配套 keep 规则在 `android/app/proguard-rules.pro`，保护 RN 反射、`@ReactMethod` 与自定义原生模块不被裁掉。
