@@ -1,5 +1,9 @@
 <resources>
-    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
+    <!-- ReactActivity 继承 AppCompatActivity，主题必须是 Theme.AppCompat 系或后代。
+         用平台主题 android:Theme.Material.* 会在 setContentView 时抛
+         IllegalStateException: You need to use a Theme.AppCompat theme -->
+    <style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
         <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowNoTitle">true</item>
     </style>
 </resources>

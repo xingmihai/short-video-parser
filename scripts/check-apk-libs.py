@@ -1,25 +1,24 @@
 #!/usr/bin/env python3
 """
-构建后校验：APK 内 native 库 + RN 0.76 合并库映射配置。
+构建后校验：APK 内 native 库 + RN 0.76 合并库映射 + Activity 主题。
 
-启动闪退的根因链（都指向同一个点）：
-  1) `dlopen failed: library "libjscexecutor.so" not found`
-  2) `dlopen failed: library "libhermes_executor.so" not found`
-RN 0.76 引入 Native Library Merging，这些"逻辑库名"不再对应独立 .so：
-  OpenSourceMergedSoMapping.mapLibName:
-    hermes_executor / hermesinstancejni / jsijniprofiler -> hermestooling
-    jscexecutor / jscruntime / jscinstance            -> jsctooling
-    reactnativejni / fabricjni / yoga ...            -> reactnative
-若 MainApplication 仍用旧写法 `SoLoader.init(this, false)`，SoLoader 不会做映射，
-会直接去磁盘 dlopen 独立库 → 必然找不到 → UnsatisfiedLinkError 闪退。
+启动闪退的根因链（两类，都曾在本项目出现过）：
+  1) `dlopen failed: library "libjs...executor.so" not found`
+     RN 0.76 引入 Native Library Merging，逻辑库名不再对应独立 .so：
+       hermes_executor / jscexecutor -> hermestooling / jsctooling
+     必须 SoLoader.init(this, OpenSourceMergedSoMapping)，否则 UnsatisfiedLinkError。
+  2) `IllegalStateException: You need to use a Theme.AppCompat theme`
+     ReactActivity 继承 AppCompatActivity，主题 parent 必须是 Theme.AppCompat 系。
+     用平台主题 android:Theme.Material.* 会在 setContentView 时崩溃。
 
-本脚本同时校验：
-  A. 源码里必须传入 OpenSourceMergedSoMapping
-  B. APK 内 .so 全部 Stored（未压缩），否则无法从 base.apk!/lib/<abi>/ 直接 dlopen
-  C. 存在合并映射的目标物理库（tooling / reactnative）与 JS 引擎库
-  D. 含 arm64-v8a
+本脚本校验：
+  A. 源码传入 OpenSourceMergedSoMapping，且无旧 boolean 重载
+  B. styles.xml 的 AppTheme 是 Theme.AppCompat 系
+  C. APK 内 .so 全部 Stored（未压缩）
+  D. 存在合并映射目标物理库 + JS 引擎库 + libreactnative.so
+  E. 含 arm64-v8a
 
-用法：python3 scripts/check-apk-libs.py [apk路径] [MainApplication.kt路径]
+用法：python3 scripts/check-apk-libs.py [apk路径] [MainApplication.kt路径] [styles.xml路径]
 """
 import sys
 import zipfile
@@ -30,6 +29,11 @@ MAIN_APP = Path(
     sys.argv[2]
     if len(sys.argv) > 2
     else "android/app/src/main/java/com/svproxy/MainApplication.kt"
+)
+THEME_XML = Path(
+    sys.argv[3]
+    if len(sys.argv) > 3
+    else "android/app/src/main/res/values/styles.xml"
 )
 
 ENGINE_LIBS = ("libhermes.so", "libjsc.so")
@@ -63,13 +67,37 @@ def check_source():
     return problems
 
 
+def check_theme():
+    print("\n---- B. Activity 主题（AppCompat） ----")
+    if not THEME_XML.exists():
+        return [f"找不到 {THEME_XML}"]
+    import re
+    src = THEME_XML.read_text(encoding="utf-8")
+    print(f"文件: {THEME_XML}")
+    m = re.search(r'<style\s+name="AppTheme"[^>]*\bparent="([^"]+)"', src)
+    parent = m.group(1) if m else "<未找到 AppTheme>"
+    print(f"AppTheme parent: {parent}")
+    problems = []
+    if not m:
+        problems.append("styles.xml 中找不到 AppTheme")
+    elif not parent.startswith("Theme.AppCompat"):
+        problems.append(
+            f'AppTheme parent 是 "{parent}"，不是 Theme.AppCompat 系；'
+            "ReactActivity(AppCompatActivity) 在 setContentView 时会抛 "
+            "IllegalStateException 并闪退"
+        )
+    else:
+        print("  ✅ Theme.AppCompat 系主题")
+    return problems
+
+
 def check_apk():
     z = zipfile.ZipFile(APK)
     sos = [n for n in z.namelist() if n.startswith("lib/") and n.endswith(".so")]
     names = {n.rsplit("/", 1)[-1] for n in sos}
     abis = sorted({n.split("/")[1] for n in sos if len(n.split("/")) > 2})
 
-    print("\n---- B/C/D. APK native 库 ----")
+    print("\n---- C/D/E. APK native 库 ----")
     print(f"APK: {APK}")
     print(f".so 总数: {len(sos)}   ABI: {abis}")
     for n in sorted(sos):
@@ -103,7 +131,7 @@ def check_apk():
 
 
 def main():
-    problems = check_source() + check_apk()
+    problems = check_source() + check_theme() + check_apk()
     if problems:
         print("\n---- 校验失败 ----")
         for p in problems:

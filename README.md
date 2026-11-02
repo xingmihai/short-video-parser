@@ -99,7 +99,25 @@ import com.facebook.react.soloader.OpenSourceMergedSoMapping
 SoLoader.init(this, OpenSourceMergedSoMapping)
 ```
 
-`scripts/check-apk-libs.py` 会同时校验源码里传入了 mapping、APK 内 `.so` 全部 Stored、存在 JS 引擎库 + tooling 合并目标库 + `libreactnative.so`、含 arm64-v8a，从构建侧堵住回归。
+### 启动闪退根因之二：Activity 主题
+
+`ReactActivity` 继承 `AppCompatActivity`，主题 parent 必须是 `Theme.AppCompat` 系。若写平台主题 `android:Theme.Material.Light.NoActionBar`，native 库全部加载成功、引擎也初始化完了，仍会在 `AppCompatActivity.setContentView` 处抛：
+
+```
+java.lang.RuntimeException: Unable to start activity ComponentInfo{com.svproxy/.MainActivity}
+Caused by: java.lang.IllegalStateException:
+  You need to use a Theme.AppCompat theme (or descendant) with this activity.
+```
+
+修法（`android/app/src/main/res/values/styles.xml`）：
+
+```xml
+<style name="AppTheme" parent="Theme.AppCompat.Light.NoActionBar">
+```
+
+并显式依赖 `androidx.appcompat:appcompat`（AppCompat 主题资源来源）。日志里成片的 `Could not find generated setter for class com.facebook.react.views.*` 是旧架构 ViewManager 走反射兜底的提示，可忽略。
+
+`scripts/check-apk-libs.py` 构建期统一校验：SoLoader mapping、AppCompat 主题、APK 内 `.so` 全部 Stored、存在 JS 引擎库 + tooling 合并目标库 + `libreactnative.so`、含 arm64-v8a。这类问题编译不会报错，只能靠静态校验拦住。
 
 `assets/` 下的 `index.android.bundle` 不受 `shrinkResources` 影响，仍可整份替换后重打包。
 配套 keep 规则在 `android/app/proguard-rules.pro`，保护 RN 反射、`@ReactMethod` 与自定义原生模块不被裁掉。

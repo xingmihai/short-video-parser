@@ -66,6 +66,9 @@ android {
 dependencies {
     implementation("com.facebook.react:react-android")
 
+    // ReactActivity 继承 AppCompatActivity，AppCompat 主题的资源来自这里
+    implementation("androidx.appcompat:appcompat:1.7.0")
+
     // 上游媒体直链请求（流式转发）
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
