@@ -54,8 +54,8 @@ object DoubaoVideoResolver {
 object DoubaoChatResolver {
     private const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36"
     fun parse(text: String, cookie: String): ResolveOutcome {
-        val url = Platform.firstUrl(text) ?: return err(400, "缺少 url 参数", Platform.DOUBAO_CHAT)
-        val html = Http.get(url, headers(UA, cookie = cookie))?.body ?: return err(500, "网页内容为空，抓取失败", Platform.DOUBAO_CHAT)
+        val vInputUrl = Platform.firstUrl(text) ?: return err(400, "缺少 url 参数", Platform.DOUBAO_CHAT)
+        val html = Http.get(vInputUrl, headers(UA, cookie = cookie))?.body ?: return err(500, "网页内容为空，抓取失败", Platform.DOUBAO_CHAT)
         val attr = Regex("""<script[^>]*data-fn-args=(?:"([^"]*)"|'([^']*)')[^>]*>""", RegexOption.IGNORE_CASE)
         var rawArgs: String? = null
         for (mm in attr.findAll(html)) {
@@ -134,7 +134,7 @@ object JimengResolver {
         if (ret.isNotEmpty() && ret != "0") return err(500, "API错误：${root.pick("errmsg")}", Platform.JIMENG)
         val d = root.obj("data") ?: return err(500, "响应缺少 data", Platform.JIMENG)
         val common = d.obj("common_attr") ?: JSONObject()
-        val author = d.obj("author") ?: JSONObject()
+        val vAuthorObj = d.obj("author") ?: JSONObject()
         val video = d.obj("video") ?: JSONObject()
         val stat = d.obj("statistic") ?: JSONObject()
         var vCover = ""
@@ -154,8 +154,8 @@ object JimengResolver {
         val vUrl = main?.let { Http.toHttps(it) ?: it }
         val vCoverH = Http.toHttps(vCover) ?: vCover
         return ok(Platform.JIMENG, listOf(m(Platform.JIMENG) {
-            type = "video"; title = common.pick("description"); author = author.pick("name")
-            avatar = author.pick("avatar_url"); cover = vCoverH; url = vUrl
+            type = "video"; title = common.pick("description"); author = vAuthorObj.pick("name")
+            avatar = vAuthorObj.pick("avatar_url"); cover = vCoverH; url = vUrl
             backups = vBackups.map { Http.toHttps(it) ?: it }
             quality = if (main != null) "origin" else ""
             duration = if (dur > 0) "${dur / 1000}s" else ""
@@ -164,10 +164,10 @@ object JimengResolver {
         }))
     }
     private fun itemId(text: String): String? {
-        val url = Platform.firstUrl(text)
-        if (url == null) return Regex("""^\d{16,}$""").find(text.trim())?.value
-        val candidates = mutableListOf(url)
-        if (url.contains("/s/")) Http.location(url, headers(Http.UA_DESKTOP))?.let { candidates.add(it) }
+        val vInputUrl = Platform.firstUrl(text)
+        if (vInputUrl == null) return Regex("""^\d{16,}$""").find(text.trim())?.value
+        val candidates = mutableListOf(vInputUrl)
+        if (vInputUrl.contains("/s/")) Http.location(vInputUrl, headers(Http.UA_DESKTOP))?.let { candidates.add(it) }
         for (u in candidates) {
             listOf("item_id", "id").forEach { queryOf(u, it)?.let { return it } }
             try {

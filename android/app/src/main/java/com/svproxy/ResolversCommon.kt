@@ -16,7 +16,9 @@ object KuaishouResolver {
         val html = Http.get(finalUrl, headers(UA, cookie = cookie))?.body ?: return err(500, "页面内容获取失败", Platform.KUAISHOU)
         var vType = ""; var vId = ""
         for ((t, re) in arrayOf("short-video" to Regex("short-video/([^?]+)"), "long-video" to Regex("long-video/([^?]+)"), "photo" to Regex("photo/([^?]+)"))) {
-            re.find(finalUrl)?.groupValues?.get(1)?.let { vType = t; vId = it; break }
+            val found = re.find(finalUrl)?.groupValues?.get(1)
+            if (found != null) { vType = t; vId = found }
+            if (vId.isNotEmpty()) break
         }
         if (vId.isEmpty()) return err(400, "无法识别的链接类型", Platform.KUAISHOU)
         initState(html)?.let { return it }
@@ -97,13 +99,13 @@ object XhsResolver {
     private const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edg/122.0.0.0"
     private const val UA2 = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36 EdgA/143.0.0.0"
     fun parse(text: String, cookie: String): ResolveOutcome {
-        var url = (Platform.firstUrl(text) ?: return err(400, "未识别到有效链接", Platform.XIAOHONGSHU)).replace("xhs.com", "xhslink.com")
-        val host = try { Uri.parse(url).host } catch (e: Exception) { null }
-        if (host != "www.xiaohongshu.com") url = Http.effectiveUrl(url, headers(UA)) ?: url
-        val id = extractId(url) ?: return err(400, "链接格式错误，无法提取ID。处理后: $url", Platform.XIAOHONGSHU)
-        var note = fetch(url, id, UA, cookie) ?: fetch(url, id, UA2, cookie)
+        var vPageUrl = (Platform.firstUrl(text) ?: return err(400, "未识别到有效链接", Platform.XIAOHONGSHU)).replace("xhs.com", "xhslink.com")
+        val host = try { Uri.parse(vPageUrl).host } catch (e: Exception) { null }
+        if (host != "www.xiaohongshu.com") vPageUrl = Http.effectiveUrl(vPageUrl, headers(UA)) ?: vPageUrl
+        val id = extractId(vPageUrl) ?: return err(400, "链接格式错误，无法提取ID。处理后: $vPageUrl", Platform.XIAOHONGSHU)
+        var note = fetch(vPageUrl, id, UA, cookie) ?: fetch(vPageUrl, id, UA2, cookie)
         if (note == null) {
-            val html = Http.get(url, headers(UA, cookie = cookie))?.body ?: ""
+            val html = Http.get(vPageUrl, headers(UA, cookie = cookie))?.body ?: ""
             val token = Regex("token=(.*?)&").find(html)?.groupValues?.get(1)
                 ?: Regex("\"xsec_token\":\\s*\"([^\"]+)\"").find(html)?.groupValues?.get(1)
             if (!token.isNullOrEmpty()) {
@@ -150,8 +152,8 @@ object XhsResolver {
         for (img in list) {
             val u = img.pick("url", "urlDefault", "urlPre")
             if (u.isNotEmpty()) vImgs.add(imgUrl(u))
-            val lv = img.path("stream", "h264")?.objs()?.firstOrNull()?.pick("masterUrl")
-                ?: img.path("stream", "h265")?.objs()?.firstOrNull()?.pick("masterUrl") ?: ""
+            val lv = img.pathArr("stream", "h264")?.objs()?.firstOrNull()?.pick("masterUrl")
+                ?: img.pathArr("stream", "h265")?.objs()?.firstOrNull()?.pick("masterUrl") ?: ""
             if (lv.isNotEmpty()) vLive.add(lv)
         }
         if (vLive.isNotEmpty()) vType = "live"
@@ -225,8 +227,8 @@ object BilibiliResolver {
 object WeiboResolver {
     private const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
     fun parse(text: String, cookie: String): ResolveOutcome {
-        val url = Platform.firstUrl(text) ?: return err(400, "未识别到有效链接", Platform.WEIBO)
-        val id = videoId(url) ?: return err(404, "无法从URL中提取视频ID: $url", Platform.WEIBO)
+        val vInputUrl = Platform.firstUrl(text) ?: return err(400, "未识别到有效链接", Platform.WEIBO)
+        val id = videoId(vInputUrl) ?: return err(404, "无法从URL中提取视频ID: $vInputUrl", Platform.WEIBO)
         val api = "https://weibo.com/tv/api/component?page=" + java.net.URLEncoder.encode("/tv/show/$id", "UTF-8")
         val resp = Http.postForm(api, mapOf("data" to "{\"Component_Play_Playinfo\":{\"oid\":\"$id\"}}"),
             headers(UA, referer = "https://weibo.com/", cookie = cookie, accept = "application/json, text/plain, */*"))
@@ -269,8 +271,8 @@ object WeiboResolver {
 object ToutiaoResolver {
     private const val UA = "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/95.0.4638.69 Safari/537.36"
     fun parse(text: String, cookie: String): ResolveOutcome {
-        val url = Platform.firstUrl(text) ?: return err(201, "url为空", Platform.TOUTIAO)
-        val id = Regex("""[0-9]+|(?<=video/)[0-9]+""").find(Http.location(url, headers(UA)) ?: url)?.value
+        val vInputUrl = Platform.firstUrl(text) ?: return err(201, "url为空", Platform.TOUTIAO)
+        val id = Regex("""[0-9]+|(?<=video/)[0-9]+""").find(Http.location(vInputUrl, headers(UA)) ?: vInputUrl)?.value
             ?: return err(400, "无法解析视频 ID", Platform.TOUTIAO)
         val html = Http.get("https://www.toutiao.com/video/$id", headers(UA, cookie = cookie))?.body ?: return err(404, "无法找到数据", Platform.TOUTIAO)
         val start = "<script id=\"RENDER_DATA\" type=\"application/json\">"
@@ -296,8 +298,8 @@ object PipixiaResolver {
     private const val UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     fun parse(text: String, cookie: String): ResolveOutcome {
         val raw = Platform.firstUrl(text) ?: return err(201, "链接不能为空", Platform.PIPIXIA)
-        val url = Http.effectiveUrl(Http.effectiveUrl(raw, headers(UA)) ?: raw, headers(UA)) ?: raw
-        val id = Regex("""item/(.*)\?""").find(url)?.groupValues?.get(1) ?: return err(404, "无法从 URL 中提取视频 ID", Platform.PIPIXIA)
+        val vInputUrl = Http.effectiveUrl(Http.effectiveUrl(raw, headers(UA)) ?: raw, headers(UA)) ?: raw
+        val id = Regex("""item/(.*)\?""").find(vInputUrl)?.groupValues?.get(1) ?: return err(404, "无法从 URL 中提取视频 ID", Platform.PIPIXIA)
         val body = Http.get("https://h5.pipix.com/bds/cell/cell_h5_comment/?count=5&aid=1319&app_name=super&cell_id=$id", headers(UA))?.body
             ?: return err(404, "API请求失败", Platform.PIPIXIA)
         val root = try { JSONObject(body) } catch (e: Exception) { return err(404, "JSON 解析失败", Platform.PIPIXIA) }
@@ -318,9 +320,9 @@ object PipixiaResolver {
 
 object PipigxResolver {
     fun parse(text: String, cookie: String): ResolveOutcome {
-        val url = Platform.firstUrl(text) ?: return err(400, "未提供 url 参数", Platform.PIPIGX)
-        val pid = queryOf(url, "pid") ?: return err(400, "提取参数出错：缺 pid", Platform.PIPIGX)
-        val mid = queryOf(url, "mid") ?: return err(400, "提取参数出错：缺 mid", Platform.PIPIGX)
+        val vInputUrl = Platform.firstUrl(text) ?: return err(400, "未提供 url 参数", Platform.PIPIGX)
+        val pid = queryOf(vInputUrl, "pid") ?: return err(400, "提取参数出错：缺 pid", Platform.PIPIGX)
+        val mid = queryOf(vInputUrl, "mid") ?: return err(400, "提取参数出错：缺 mid", Platform.PIPIGX)
         val payload = "{\"pid\":${pid.toLongOrNull() ?: 0},\"mid\":${mid.toLongOrNull() ?: 0},\"type\":\"post\"}"
         val resp = Http.postJson("https://h5.pipigx.com/ppapi/share/fetch_content", payload,
             mapOf("Content-Type" to "application/json", "User-Agent" to Http.UA_DESKTOP))

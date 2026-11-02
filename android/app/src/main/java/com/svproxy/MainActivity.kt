@@ -172,9 +172,9 @@ class MainActivity : Activity() {
         tvTitle.text = v.title.ifEmpty { "(无标题)" }
         tvAuthor.text = if (v.author.isNotEmpty()) "@${v.author}" else ""
         tvPublish.text = v.publishTime
-        val ref = Media.refererFor(v.platform)
+        val ref = MediaKit.refererFor(v.platform)
         ivCover.visibility = if (v.cover.isNotEmpty()) View.VISIBLE else View.GONE
-        if (v.cover.isNotEmpty()) { ivCover.setImageBitmap(null); Media.loadImage(v.cover, ref, ivCover) }
+        if (v.cover.isNotEmpty()) { ivCover.setImageBitmap(null); MediaKit.loadImage(v.cover, ref, ivCover) }
 
         val vis = if (v.url.isNullOrEmpty()) View.GONE else View.VISIBLE
         tvUrlLabel.visibility = vis; tvUrl.visibility = vis; tvUrl.text = v.url ?: ""
@@ -191,7 +191,7 @@ class MainActivity : Activity() {
                     scaleType = ImageView.ScaleType.CENTER_CROP; setBackgroundColor(0xFF000000.toInt())
                     setOnClickListener { download(v, u, "image/jpeg", "_${i + 1}") }
                 }
-                Media.loadImage(u, ref, iv); llThumbs.addView(iv)
+                MediaKit.loadImage(u, ref, iv); llThumbs.addView(iv)
             }
         } else hsThumbs.visibility = View.GONE
 
@@ -218,13 +218,13 @@ class MainActivity : Activity() {
 
     private fun download(v: Media, url: String, mime: String, suffix: String = "") {
         toast("下载中…"); btnDownload.isEnabled = false
-        Media.download(this, url, nameOf(v, suffix), mime, Media.refererFor(v.platform)) { result ->
+        MediaKit.download(this, url, nameOf(v, suffix), mime, MediaKit.refererFor(v.platform)) { result ->
             runOnUiThread {
                 btnDownload.isEnabled = true
                 result.fold(
                     onSuccess = { f ->
                         toast("已保存 ${String.format("%.1f", f.length() / 1048576.0)} MB，正在打开")
-                        try { Media.open(this, f, mime) } catch (e: Exception) { toast("已保存到 ${f.absolutePath}，但没有可用播放器") }
+                        try { MediaKit.open(this, f, mime) } catch (e: Exception) { toast("已保存到 ${f.absolutePath}，但没有可用播放器") }
                     },
                     onFailure = { e -> toast("下载失败：${e.message ?: e}") },
                 )

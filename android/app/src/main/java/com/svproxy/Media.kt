@@ -14,7 +14,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
 /** 带对应平台 Referer 的下载 / 图片加载，不引第三方图片库 */
-object Media {
+object MediaKit {
     private const val UA = "Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Mobile Safari/537.36"
 
     fun refererFor(p: String): String = when (p) {
