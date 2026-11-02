@@ -87,17 +87,20 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') || inputs.create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v2.0.0-build{0}', github.run_number) }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v3.0.0-build{0}', github.run_number) }}
           name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('sv-douyin build {0}', github.run_number) }}
           body: |
-            纯 Kotlin 版安装包，由 GitHub Actions 自动构建。
+            纯 Kotlin 全平台版安装包，由 GitHub Actions 自动构建。
 
             - `sv-douyin.apk`：已签名，直接安装（R8 + 资源压缩）
             - **无 React Native、无 Hermes/JSC、无 index.android.bundle、无 JS 资产**
-            - 解析逻辑：OkHttp + org.json，全部编译进 classes.dex
+            - 14 个平台：抖音(单作品/主页批量)、快手、小红书、B站、微博、头条、
+              皮皮虾、皮皮搞笑、最右、豆包AI视频、豆包对话、即梦AI、网易云音乐
+            - 解析逻辑全部由 OkHttp + org.json + javax.crypto 编译进 classes.dex
 
-            用法：抖音「分享 → 复制链接」→ 打开 App → 粘贴并解析 → 播放 / 下载。
-            下载由原生 OkHttp 带 Referer 完成，不监听端口、无需服务器。
+            用法：复制任意平台分享文案 → 打开 App → 粘贴并解析 → 播放 / 下载。
+            高级设置里可填 Cookie（抖音主页必填）、选网易云音质与主页条数。
+            下载由原生 OkHttp 带对应平台 Referer 完成，不监听端口、无需服务器。
             CI 会断言 APK 内不存在任何 bundle / JS 引擎 .so。
           files: dist/sv-douyin.apk
           draft: false

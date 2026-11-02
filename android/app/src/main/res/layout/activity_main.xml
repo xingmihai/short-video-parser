@@ -1,264 +1,127 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="#0f1115"
-    android:fillViewport="true">
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="#0f1115" android:fillViewport="true">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="16dp" android:paddingBottom="32dp">
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp"
-        android:paddingBottom="32dp">
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="短视频解析 · 全平台" android:textColor="#ffffff" android:textSize="21sp" android:textStyle="bold" />
+        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="3dp" android:layout_marginBottom="14dp"
+            android:text="粘贴分享链接，自动识别平台，直接出无水印直链" android:textColor="#8b93a1" android:textSize="13sp" />
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="短视频解析"
-            android:textColor="#ffffff"
-            android:textSize="21sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
-            android:layout_marginBottom="14dp"
-            android:text="粘贴抖音分享链接，直接出无水印直链"
-            android:textColor="#8b93a1"
-            android:textSize="13sp" />
-
-        <!-- 输入卡片 -->
         <LinearLayout style="@style/Card">
-
-            <TextView
-                style="@style/Label"
-                android:text="抖音分享链接 / 整段文案" />
-
-            <EditText
-                android:id="@+id/etInput"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:minHeight="88dp"
-                android:background="@drawable/bg_input"
-                android:gravity="top|start"
-                android:hint="7.79 复制打开抖音，看看 https://v.douyin.com/xxxx/ ..."
-                android:inputType="textMultiLine|textNoSuggestions"
-                android:padding="10dp"
-                android:textColor="#e6e8ec"
-                android:textColorHint="#5b6472"
-                android:textSize="13sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnPaste"
-                    style="@style/BtnGhost"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:text="粘贴并解析" />
-
-                <Space
-                    android:layout_width="8dp"
-                    android:layout_height="1dp" />
-
-                <Button
-                    android:id="@+id/btnParse"
-                    style="@style/BtnPrimary"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:text="解 析" />
+            <TextView style="@style/Label" android:text="分享链接 / 整段文案" />
+            <EditText android:id="@+id/etInput" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:minHeight="88dp" android:background="@drawable/bg_input" android:gravity="top|start"
+                android:hint="复制抖音/快手/小红书/B站… 的分享文案，或直接粘贴链接"
+                android:inputType="textMultiLine|textNoSuggestions" android:padding="10dp"
+                android:textColor="#e6e8ec" android:textColorHint="#5b6472" android:textSize="13sp" />
+            <TextView style="@style/Label" android:layout_marginTop="12dp" android:text="平台" />
+            <Spinner android:id="@+id/spPlatform" android:layout_width="match_parent" android:layout_height="44dp"
+                android:background="@drawable/bg_input" android:popupBackground="#1f2937" />
+            <Button android:id="@+id/btnAdvanced" style="@style/BtnSmall" android:layout_width="match_parent"
+                android:layout_marginTop="10dp" android:text="▸ 高级设置（Cookie / 音质 / 数量）" />
+            <LinearLayout android:id="@+id/llAdvanced" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="8dp" android:orientation="vertical" android:visibility="gone">
+                <TextView style="@style/Label" android:text="Cookie（可选，仅抖音主页 / B站 / 小红书 / 头条 / 网易云等需要）" />
+                <EditText android:id="@+id/etCookie" android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:background="@drawable/bg_input" android:hint="粘贴网页版登录 Cookie"
+                    android:inputType="text|textNoSuggestions" android:padding="10dp"
+                    android:textColor="#e6e8ec" android:textColorHint="#5b6472" android:textSize="12sp" />
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp" android:orientation="horizontal">
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                        android:text="网易云音质" android:textColor="#8b93a1" android:textSize="12sp" />
+                    <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1"
+                        android:text="主页条数" android:textColor="#8b93a1" android:textSize="12sp" />
+                </LinearLayout>
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+                    <Spinner android:id="@+id/spLevel" android:layout_width="0dp" android:layout_height="40dp"
+                        android:layout_weight="1" android:background="@drawable/bg_input" android:popupBackground="#1f2937" />
+                    <EditText android:id="@+id/etCount" android:layout_width="0dp" android:layout_height="40dp"
+                        android:layout_weight="1" android:background="@drawable/bg_input" android:inputType="number"
+                        android:padding="8dp" android:text="18" android:textColor="#e6e8ec" android:textSize="12sp" />
+                </LinearLayout>
             </LinearLayout>
-
-            <TextView
-                style="@style/Tip"
-                android:text="支持分享口令、v.douyin.com 短链、网页版链接；视频 / 图集 / 实况" />
-
-            <ProgressBar
-                android:id="@+id/progress"
-                style="?android:attr/progressBarStyleSmall"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="8dp"
-                android:visibility="gone" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="12dp" android:orientation="horizontal">
+                <Button android:id="@+id/btnPaste" style="@style/BtnGhost" android:layout_width="0dp"
+                    android:layout_weight="1" android:text="粘贴并解析" />
+                <Space android:layout_width="8dp" android:layout_height="1dp" />
+                <Button android:id="@+id/btnParse" style="@style/BtnPrimary" android:layout_width="0dp"
+                    android:layout_weight="1" android:text="解 析" />
+            </LinearLayout>
+            <TextView style="@style/Tip"
+                android:text="抖音 / 快手 / 小红书 / B站 / 微博 / 头条 / 皮皮虾 / 皮皮搞笑 / 最右 / 抖音主页 / 豆包 / 即梦 / 网易云" />
+            <ProgressBar android:id="@+id/progress" style="?android:attr/progressBarStyleSmall"
+                android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal" android:layout_marginTop="8dp" android:visibility="gone" />
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/tvError"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            android:background="@drawable/bg_error"
-            android:padding="12dp"
-            android:textColor="#f87171"
-            android:textSize="13sp"
-            android:visibility="gone" />
+        <TextView android:id="@+id/tvError" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginBottom="12dp" android:background="@drawable/bg_error" android:padding="12dp"
+            android:textColor="#f87171" android:textSize="13sp" android:visibility="gone" />
 
-        <!-- 结果 -->
-        <LinearLayout
-            android:id="@+id/resultRoot"
-            style="@style/Card"
-            android:visibility="gone">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/tvType"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_tag"
-                    android:paddingLeft="8dp"
-                    android:paddingTop="3dp"
-                    android:paddingRight="8dp"
-                    android:paddingBottom="3dp"
-                    android:textColor="#ffffff"
-                    android:textSize="11sp" />
-
-                <TextView
-                    android:id="@+id/tvMeta"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginLeft="8dp"
-                    android:textColor="#9ca3af"
-                    android:textSize="11sp" />
+        <LinearLayout android:id="@+id/resultRoot" style="@style/Card" android:visibility="gone">
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp" android:orientation="horizontal">
+                <TextView android:id="@+id/tvPlatform" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:background="@drawable/bg_tag" android:paddingLeft="8dp" android:paddingTop="3dp"
+                    android:paddingRight="8dp" android:paddingBottom="3dp" android:textColor="#ffffff" android:textSize="11sp" />
+                <TextView android:id="@+id/tvMeta" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:layout_marginLeft="8dp" android:textColor="#9ca3af" android:textSize="11sp" />
             </LinearLayout>
-
-            <TextView
-                android:id="@+id/tvTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:maxLines="2"
-                android:textColor="#e6e8ec"
-                android:textSize="15sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/tvAuthor"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:textColor="#60a5fa"
-                android:textSize="12sp" />
-
-            <TextView
-                android:id="@+id/tvPublish"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="8dp"
-                android:textColor="#9ca3af"
-                android:textSize="11sp" />
-
-            <ImageView
-                android:id="@+id/ivCover"
-                android:layout_width="match_parent"
-                android:layout_height="190dp"
-                android:background="#000000"
-                android:scaleType="centerCrop"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/tvUrlLabel"
-                style="@style/Label"
-                android:layout_marginTop="12dp"
-                android:text="无水印直链" />
-
-            <TextView
-                android:id="@+id/tvUrl"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="10dp"
-                android:fontFamily="monospace"
-                android:maxLines="3"
-                android:textColor="#a5b4fc"
-                android:textSize="10sp" />
-
-            <LinearLayout
-                android:id="@+id/btnPlayRow"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <Button
-                    android:id="@+id/btnPlay"
-                    style="@style/BtnPrimary"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:text="播放" />
-
-                <Space
-                    android:layout_width="8dp"
-                    android:layout_height="1dp" />
-
-                <Button
-                    android:id="@+id/btnDownload"
-                    style="@style/BtnGhost"
-                    android:layout_width="0dp"
-                    android:layout_weight="1"
-                    android:text="下载" />
-            </LinearLayout>
-
-            <Button
-                android:id="@+id/btnCopy"
-                style="@style/BtnSmall"
-                android:layout_width="match_parent"
-                android:layout_marginTop="8dp"
-                android:text="复制直链" />
-
-            <TextView
-                style="@style/Tip"
-                android:text="播放若被防盗链拦截，用「下载」（带 Referer 拉取）" />
-
-            <HorizontalScrollView
-                android:id="@+id/hsThumbs"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:visibility="gone">
-
-                <LinearLayout
-                    android:id="@+id/llThumbs"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+            <TextView android:id="@+id/tvNote" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp" android:textColor="#fbbf24" android:textSize="11sp" android:visibility="gone" />
+            <TextView android:id="@+id/tvCount" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginBottom="6dp" android:textColor="#9ca3af" android:textSize="11sp" android:visibility="gone" />
+            <HorizontalScrollView android:id="@+id/hsItems" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp" android:visibility="gone">
+                <LinearLayout android:id="@+id/llItems" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:orientation="horizontal" />
             </HorizontalScrollView>
-
-            <TextView
-                android:id="@+id/tvLive"
-                style="@style/Tip"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/tvBackup"
-                style="@style/Label"
-                android:layout_marginTop="10dp"
-                android:text="备选直链"
-                android:visibility="gone" />
-
-            <Button
-                android:id="@+id/btnMusic"
-                style="@style/BtnSmall"
-                android:layout_width="match_parent"
-                android:layout_marginTop="10dp"
-                android:visibility="gone" />
+            <TextView android:id="@+id/tvTitle" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:maxLines="2" android:textColor="#e6e8ec" android:textSize="15sp" android:textStyle="bold" />
+            <TextView android:id="@+id/tvAuthor" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginTop="4dp" android:textColor="#60a5fa" android:textSize="12sp" />
+            <TextView android:id="@+id/tvPublish" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp" android:textColor="#9ca3af" android:textSize="11sp" />
+            <ImageView android:id="@+id/ivCover" android:layout_width="match_parent" android:layout_height="190dp"
+                android:background="#000000" android:scaleType="centerCrop" android:visibility="gone" />
+            <TextView android:id="@+id/tvUrlLabel" style="@style/Label" android:layout_marginTop="12dp" android:text="无水印直链" />
+            <TextView android:id="@+id/tvUrl" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp" android:fontFamily="monospace" android:maxLines="3"
+                android:textColor="#a5b4fc" android:textSize="10sp" />
+            <LinearLayout android:id="@+id/btnPlayRow" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal">
+                <Button android:id="@+id/btnPlay" style="@style/BtnPrimary" android:layout_width="0dp"
+                    android:layout_weight="1" android:text="播放" />
+                <Space android:layout_width="8dp" android:layout_height="1dp" />
+                <Button android:id="@+id/btnDownload" style="@style/BtnGhost" android:layout_width="0dp"
+                    android:layout_weight="1" android:text="下载" />
+            </LinearLayout>
+            <Button android:id="@+id/btnCopy" style="@style/BtnSmall" android:layout_width="match_parent"
+                android:layout_marginTop="8dp" android:text="复制直链" />
+            <TextView android:id="@+id/tvExtra" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="10dp" android:fontFamily="monospace" android:textColor="#8b93a1"
+                android:textSize="11sp" android:visibility="gone" />
+            <HorizontalScrollView android:id="@+id/hsThumbs" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="10dp" android:visibility="gone">
+                <LinearLayout android:id="@+id/llThumbs" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+            <TextView android:id="@+id/tvLive" style="@style/Tip" android:visibility="gone" />
+            <TextView android:id="@+id/tvBackup" style="@style/Label" android:layout_marginTop="10dp"
+                android:text="备选直链" android:visibility="gone" />
+            <Button android:id="@+id/btnMusic" style="@style/BtnSmall" android:layout_width="match_parent"
+                android:layout_marginTop="10dp" android:visibility="gone" />
+            <TextView style="@style/Tip" android:text="播放若被防盗链拦截，用「下载」（原生 OkHttp 带对应平台 Referer 拉取）" />
         </LinearLayout>
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
-            android:gravity="center"
-            android:text="纯 Kotlin · 无 JS 引擎 · 解析逻辑源自 jiuhunwl/short_videos (MIT)"
-            android:textColor="#4b5563"
-            android:textSize="10sp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp"
+            android:gravity="center" android:text="纯 Kotlin · 无 JS 引擎 · 解析逻辑源自 jiuhunwl/short_videos (MIT)"
+            android:textColor="#4b5563" android:textSize="10sp" />
     </LinearLayout>
 </ScrollView>
