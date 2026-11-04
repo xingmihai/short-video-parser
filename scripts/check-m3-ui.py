@@ -60,6 +60,12 @@ else:
     if "APP_VERSION_CODE" not in pre or "APP_VERSION_NAME" not in pre:
         problems.append("预发行工作流未注入自动版本号")
 for wf, name in [(workflow, "build-apk.yml"), (pre, "prerelease.yml")]:
+    # runner context 不允许出现在 job 级 env（会让整个 workflow 解析失败）
+    job_head = wf.split("- name:", 1)[0]
+    if "${{ runner." in job_head:
+        problems.append(f"{name} 的 job 级 env 使用了 runner context")
+    if "SIGNING_KEYSTORE=$KS" not in wf and 'SIGNING_KEYSTORE=$KS' not in wf:
+        problems.append(f"{name} 未通过 GITHUB_ENV 注入签名库路径")
     if "secrets.SIGNING_KEYSTORE_BASE64" not in wf:
         problems.append(f"{name} 未载入签名密钥")
     if "verify-signature.sh" not in wf:

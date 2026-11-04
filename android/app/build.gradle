@@ -8,7 +8,7 @@ def ciVersionName = System.getenv("APP_VERSION_NAME") ?: "0.0.0-local"
 
 // 签名密钥从环境密钥注入；未配置时回退到仓库内 debug.keystore（仅本地构建用）
 def envKeystore = System.getenv("SIGNING_KEYSTORE") ?: ""
-def useReleaseSigning = envKeystore.isNotEmpty() && file(envKeystore).exists()
+def useReleaseSigning = !envKeystore.isEmpty() && file(envKeystore).exists()
 
 android {
     namespace "com.svproxy"
@@ -46,8 +46,11 @@ android {
     buildTypes {
         release {
             // CI 注入 SIGNING_* 时用环境密钥签名，本地回退 debug.keystore
-            if (useReleaseSigning) signingConfig signingConfigs.release
-            else signingConfig signingConfigs.debug
+            if (useReleaseSigning) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
