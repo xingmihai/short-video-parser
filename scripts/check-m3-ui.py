@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 构建前静态校验：界面确实使用 Material 3 Expressive（MDC-Android Views），
-compileSdk 为 37，发行版文件名与仓库名一致，且工作流不会重复触发构建。
-编译期不报错的回退，在这里拦住。
+compileSdk / targetSdk = 37、minSdk = 26，发行版文件名与仓库名一致，
+且工作流不会重复触发构建。编译期不报错的回退，在这里拦住。
 """
 import pathlib
 import sys
@@ -30,6 +30,10 @@ workflow = read(workflow_path)
 
 if "compileSdk 37" not in gradle:
     problems.append("compileSdk 不是 37")
+if "targetSdk 37" not in gradle:
+    problems.append("targetSdk 不是 37")
+if "minSdk 26" not in gradle:
+    problems.append("minSdk 不是 26")
 if "android.suppressUnsupportedCompileSdk=37" not in props:
     problems.append("gradle.properties 缺少 android.suppressUnsupportedCompileSdk=37")
 if "platforms;android-37" not in workflow:

@@ -4,16 +4,16 @@ apply plugin: "org.jetbrains.kotlin.android"
 android {
     namespace "com.svproxy"
     // Android 17 / API 37；AGP 8.7.3 官方只测到 API 35，
-    // 由 gradle.properties 的 android.suppressUnsupportedCompileSdk=37 放行
+    // 由 gradle.properties 的 android.suppressUnsupportedCompileSdk=37,37.0 放行
     compileSdk 37
 
     defaultConfig {
         applicationId "com.svproxy"
-        minSdk 24
-        // compileSdk 不强制 targetSdk 同步抬升，保留 35 避免引入 Android 17 行为变更
-        targetSdk 35
-        versionCode 5
-        versionName "3.2.0"
+        minSdk 26
+        // compileSdk 与 targetSdk 都对齐 Android 17 / API 37
+        targetSdk 37
+        versionCode 6
+        versionName "3.2.1"
     }
 
     signingConfigs {
