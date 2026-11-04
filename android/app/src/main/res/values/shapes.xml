@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 非对称圆角：呼应 M3 Expressive 的 contrasting shapes / shape library -->
-    <style name="ShapeAppearance.App.Card">
+    <!-- 名称含 "." 的 style 必须显式 parent=""，否则 aapt 会把
+         ShapeAppearance.App 当成隐式父样式去查找并报 not found -->
+    <style name="ShapeAppearance.App.Card" parent="">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSizeTopLeft">32dp</item>
         <item name="cornerSizeTopRight">10dp</item>
@@ -9,7 +10,7 @@
         <item name="cornerSizeBottomLeft">10dp</item>
     </style>
 
-    <style name="ShapeAppearance.App.Card.Alt">
+    <style name="ShapeAppearance.App.Card.Alt" parent="">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSizeTopLeft">10dp</item>
         <item name="cornerSizeTopRight">32dp</item>
@@ -17,12 +18,12 @@
         <item name="cornerSizeBottomLeft">32dp</item>
     </style>
 
-    <style name="ShapeAppearance.App.Cover">
+    <style name="ShapeAppearance.App.Cover" parent="">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">24dp</item>
     </style>
 
-    <style name="ShapeAppearance.App.Chip">
+    <style name="ShapeAppearance.App.Chip" parent="">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">16dp</item>
     </style>
