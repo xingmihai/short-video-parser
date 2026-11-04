@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 构建前静态校验：界面确实使用 Material 3 Expressive（MDC-Android Views），
-且发行版文件名与仓库名一致。编译期不报错的 UI 回退，在这里拦住。
+compileSdk 为 37，发行版文件名与仓库名一致，且工作流不会重复触发构建。
+编译期不报错的回退，在这里拦住。
 """
 import pathlib
 import sys
@@ -12,6 +13,8 @@ RES = ROOT / "android/app/src/main/res"
 themes_path = RES / "values/themes.xml"
 layout_path = RES / "layout/activity_main.xml"
 gradle_path = ROOT / "android/app/build.gradle"
+props_path = ROOT / "android/gradle.properties"
+workflow_path = ROOT / ".github/workflows/build-apk.yml"
 old_styles = RES / "values/styles.xml"
 
 problems = []
@@ -22,6 +25,19 @@ def read(p):
 themes = read(themes_path)
 layout = read(layout_path)
 gradle = read(gradle_path)
+props = read(props_path)
+workflow = read(workflow_path)
+
+if "compileSdk 37" not in gradle:
+    problems.append("compileSdk 不是 37")
+if "android.suppressUnsupportedCompileSdk=37" not in props:
+    problems.append("gradle.properties 缺少 android.suppressUnsupportedCompileSdk=37")
+if "platforms;android-37" not in workflow:
+    problems.append("CI 未安装 Android 17 platform")
+# 只允许 tag push / PR / 手动触发构建，push 到 main 不应再触发一次
+push_block = workflow.split("pull_request:", 1)[0]
+if "branches:" in push_block:
+    problems.append("workflow 仍监听 main push，会与 tag push 重复构建")
 
 if "Theme.Material3Expressive" not in themes:
     problems.append("主题未继承 Theme.Material3Expressive.*")

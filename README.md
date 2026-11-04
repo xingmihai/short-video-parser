@@ -78,7 +78,9 @@ python3 ../scripts/check-m3-ui.py
 python3 ../scripts/check-no-bundle.py app/build/outputs/apk/release/short-video-parser.apk
 ```
 
-GitHub Actions（`.github/workflows/build-apk.yml`）在 push / PR / 打 `v*` 标签时自动构建：JDK 17 + Android SDK 35 + Gradle 8.9 + AGP 8.7.3，打标签即发布 Release。
+GitHub Actions（`.github/workflows/build-apk.yml`）**只在打 `v*` 标签时构建一次**（另有 PR 与手动触发）；push 到 `main` 不再触发，避免 main + tag 两次重复构建。环境：JDK 17 + Android SDK Platform 35 / 37 + Gradle 8.9 + AGP 8.7.3 + Kotlin 2.2.0，打标签即发布 Release。
+
+`compileSdk = 37`（Android 17 / API 37），`targetSdk` 保持 35。AGP 8.7.3 官方只测到 API 35，由 `android/gradle.properties` 的 `android.suppressUnsupportedCompileSdk=37` 放行；AGP 缺 android-37 平台时会自动补下载。
 
 CI 有三道硬断言：
 

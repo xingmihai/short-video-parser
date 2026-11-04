@@ -3,15 +3,17 @@ apply plugin: "org.jetbrains.kotlin.android"
 
 android {
     namespace "com.svproxy"
-    // MDC 1.14.0 (M3 Expressive) 编译于 compileSdk 35
-    compileSdk 35
+    // Android 17 / API 37；AGP 8.7.3 官方只测到 API 35，
+    // 由 gradle.properties 的 android.suppressUnsupportedCompileSdk=37 放行
+    compileSdk 37
 
     defaultConfig {
         applicationId "com.svproxy"
         minSdk 24
+        // compileSdk 不强制 targetSdk 同步抬升，保留 35 避免引入 Android 17 行为变更
         targetSdk 35
-        versionCode 4
-        versionName "3.1.0"
+        versionCode 5
+        versionName "3.2.0"
     }
 
     signingConfigs {

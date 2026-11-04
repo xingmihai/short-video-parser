@@ -2,7 +2,7 @@ name: 构建 Android 安装包
 
 on:
   push:
-    branches: [main]
+    # 只在打 tag 时构建；push 到 main 不再触发，避免 main + tag 两次重复构建
     tags: ['v*']
   pull_request:
   workflow_dispatch:
@@ -47,6 +47,8 @@ jobs:
           if [ -n "$SDKMGR" ] && [ -x "$SDKMGR" ]; then
             yes | "$SDKMGR" --licenses > /dev/null || true
             "$SDKMGR" "platforms;android-35" "build-tools;35.0.0" "platform-tools" > /dev/null || true
+            # compileSdk 37 需要 Android 17 platform（AGP 缺件时也会自动补下载）
+            "$SDKMGR" "platforms;android-37" > /dev/null || true
           else
             echo "sdkmanager 未找到，交由 AGP 自动下载所需组件"
           fi
@@ -90,12 +92,13 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') || inputs.create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v3.1.0-build{0}', github.run_number) }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v3.2.0-build{0}', github.run_number) }}
           name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('short-video-parser build {0}', github.run_number) }}
           body: |
             Material 3 Expressive 界面版安装包，由 GitHub Actions 自动构建。
 
             - `short-video-parser.apk`：已签名，直接安装（R8 + 资源压缩）
+            - compileSdk 37（Android 17 / API 37），targetSdk 保持 35
             - **无 React Native、无 Hermes/JSC、无 index.android.bundle、无 JS 资产**
             - UI：MDC-Android 1.14.0 `Theme.Material3Expressive`、动态色、非对称形状、
               Toolbar + FAB、Exposed Dropdown、Button group、Chip、波形进度与过渡动效
