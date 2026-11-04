@@ -2,9 +2,10 @@ name: 构建 Android 安装包
 
 on:
   push:
-    # 只在打 tag 时构建；push 到 main 由「自动预发行」工作流负责，避免重复构建
+    # 打 tag / PR 只构建，绝不发行；push 到 main 由「自动预发行」工作流负责
     tags: ['v*']
   pull_request:
+  # 手动点 Run workflow 时：构建完成后自动发布正式发行版
   workflow_dispatch:
 
 permissions:
@@ -91,6 +92,8 @@ jobs:
           SHORT_SHA="$(git rev-parse --short=7 HEAD)"
           echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
           echo "name=build-${{ github.run_number }}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          # release- 前缀不命中 on.push.tags 的 v* 规则，创建 tag 不会递归触发本工作流
+          echo "release_tag=release-${{ github.run_number }}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
 
       - name: 编译 Release APK
         working-directory: android
@@ -121,7 +124,31 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # 正式发行版不再自动发布：只出构建产物，正式 Release 由人工在 GitHub 上发布
+      # 发行说明只写「本次更新」：直接取本次提交信息
+      # 仅 workflow_dispatch 执行；push tag / PR 绝不走到这里
+      - name: 生成发行说明
+        id: notes
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          {
+            echo 'text<<NOTES_EOF'
+            echo '## 本次更新'
+            echo
+            git log -1 --pretty=%B
+            echo 'NOTES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      # 手动构建才发行：push / PR 触发的构建只上传产物，不创建 Release
+      - name: 发布正式发行版
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.release_tag }}
+          name: 正式发行 ${{ steps.meta.outputs.name }}
+          body: ${{ steps.notes.outputs.text }}
+          files: dist/short-video-parser.apk
+          draft: false
+          prerelease: false
 
       # 失败时把构建日志回传到 ci-debug 分支，便于排查（不污染 main）
       - name: 回传构建日志

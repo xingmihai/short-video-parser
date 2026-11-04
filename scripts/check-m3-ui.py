@@ -43,10 +43,26 @@ if "System.getenv(\"APP_VERSION_CODE\")" not in gradle or "System.getenv(\"APP_V
     problems.append("版本号未从环境注入")
 if "SIGNING_KEYSTORE" not in gradle or "SIGNING_STORE_PASSWORD" not in gradle:
     problems.append("签名未从环境密钥注入")
-if "softprops/action-gh-release" in workflow:
-    problems.append("正式工作流仍在自动发布 Release")
-if "gh release create" in workflow:
-    problems.append("正式工作流仍在创建 Release")
+# 正式发行版：必须存在发布步骤，且只在 workflow_dispatch 下执行（push / PR 绝不发行）
+if "softprops/action-gh-release" not in workflow:
+    problems.append("正式工作流缺少手动发布 Release 步骤")
+if workflow.count("if: github.event_name == 'workflow_dispatch'") < 2:
+    problems.append("生成说明 / 发布正式版未限定为手动触发（会随 push 自动发行）")
+pub = workflow.split("name: 发布正式发行版", 1)[-1].split("- name:", 1)[0] \
+    if "name: 发布正式发行版" in workflow else ""
+if pub:
+    if "workflow_dispatch" not in pub:
+        problems.append("发布正式版步骤没有 workflow_dispatch 条件")
+    if "prerelease: false" not in pub or "draft: false" not in pub:
+        problems.append("手动发布不是正式发行版（prerelease / draft 配置错误）")
+    if "steps.meta.outputs.release_tag" not in pub:
+        problems.append("发行 tag 未使用自动计算的 release_tag")
+if re.search(r"tag_name:\s*['\"]?v?\d+\.\d+\.\d+", workflow):
+    problems.append("正式发行 tag 硬编码了版本号")
+# on.push 段里不得出现任何发行动作
+push_block = workflow.split("pull_request:", 1)[0]
+if "release" in push_block.lower():
+    problems.append("on.push 段出现了发行相关内容")
 if not pre_path.exists():
     problems.append("缺少 .github/workflows/prerelease.yml")
 else:

@@ -89,8 +89,11 @@ GitHub Actions 分两条工作流，互不重复：
 
 | 工作流 | 触发 | 做什么 |
 |---|---|---|
-| `build-apk.yml` | push `v*` 标签 / PR / 手动 | 构建 + 签名 + 上传构建产物，**不自动发布正式发行版**（正式 Release 人工在 GitHub 发布） |
+| `build-apk.yml` | push `v*` 标签 / PR | 只构建 + 签名 + 上传产物，**绝不发行** |
+| `build-apk.yml` | 手动 `Run workflow` | 构建 + 签名 + **自动发布正式发行版**（`prerelease: false`） |
 | `prerelease.yml` | push `main` / 手动 | 自动预发行：先删光所有旧预发行（连 tag），再创建唯一一个 prerelease |
+
+也就是说：**推送不发行，手动构建才发行正式版**。手动触发时 Release 的 tag / 标题同样自动算出（`release-<run>-<sha>` / `build-<run>-<sha>`），发行说明只取本次提交信息；`release-` 前缀不命中 `v*` 标签规则，创建 tag 不会递归触发本工作流。
 
 `prerelease.yml` 用 `concurrency` 串行化，末尾还断言仓库里 `isPrerelease` 数量必须为 1。预发行 tag / 版本名 / 版本号都由 `github.run_number` 与提交短 SHA 自动算出，**源码与工作流里不硬编码任何版本号**；`versionCode` 用 run number，`versionName` 形如 `pre-<run>-<sha>`，通过 `APP_VERSION_CODE` / `APP_VERSION_NAME` 注入 `build.gradle`。
 
@@ -108,7 +111,7 @@ GitHub Actions 分两条工作流，互不重复：
 
 CI 有三道硬断言：
 
-- `check-m3-ui.py`：主题继承 `Theme.Material3Expressive`、组件齐全、无旧手写资源；并断言版本号未硬编码、签名走环境密钥、正式工作流不自动发 Release、预发行工作流存在且只保留一个
+- `check-m3-ui.py`：主题继承 `Theme.Material3Expressive`、组件齐全、无旧手写资源；并断言版本号未硬编码、签名走环境密钥、正式发行步骤只在 `workflow_dispatch` 下执行（push 绝不发行）、预发行工作流存在且只保留一个
 - `check-no-bundle.py`：APK 内无 JS 资产 / JS 引擎 `.so` / `lib/` 下有 `.so`，且文件名必须是 `short-video-parser.apk`
 - `verify-signature.sh`：APK 签名证书指纹与注入密钥库一致
 
