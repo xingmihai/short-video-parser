@@ -47,11 +47,23 @@ jobs:
           if [ -n "$SDKMGR" ] && [ -x "$SDKMGR" ]; then
             yes | "$SDKMGR" --licenses > /dev/null || true
             "$SDKMGR" "platforms;android-35" "build-tools;35.0.0" "platform-tools" > /dev/null || true
-            # compileSdk 37 需要 Android 17 platform（AGP 缺件时也会自动补下载）
-            "$SDKMGR" "platforms;android-37" > /dev/null || true
+            # Android 17 平台稳定 channel 未必有，依次试 channel 0-3 与带小版本的包名
+            for CH in "" "--channel=0" "--channel=1" "--channel=2" "--channel=3"; do
+              for PKG in "platforms;android-37" "platforms;android-37.0" "platforms;android-37.1"; do
+                if "$SDKMGR" $CH "$PKG" > /dev/null 2>&1; then
+                  echo "已安装 $PKG (${CH:-default})"
+                  break 2
+                fi
+              done
+            done
+            echo "=== 已安装的 37 平台目录 ==="
+            ls -d "$SDK_ROOT"/platforms/android-37* 2>/dev/null || true
+            "$SDKMGR" --list --channel=1 2>/dev/null | grep -i "android-37" | head -10 || true
           else
-            echo "sdkmanager 未找到，交由 AGP 自动下载所需组件"
+            echo "sdkmanager 未找到，直接走仓库内的平台准备脚本（含下载兜底）"
           fi
+          # AGP 8.x 只认 platforms;android-37 这个 hash，统一整理目录与元数据
+          python3 scripts/prepare-sdk37.py "$SDK_ROOT"
           echo "ANDROID_HOME=$SDK_ROOT" >> "$GITHUB_ENV"
 
       - name: Gradle 缓存

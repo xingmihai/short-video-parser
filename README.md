@@ -80,7 +80,7 @@ python3 ../scripts/check-no-bundle.py app/build/outputs/apk/release/short-video-
 
 GitHub Actions（`.github/workflows/build-apk.yml`）**只在打 `v*` 标签时构建一次**（另有 PR 与手动触发）；push 到 `main` 不再触发，避免 main + tag 两次重复构建。环境：JDK 17 + Android SDK Platform 35 / 37 + Gradle 8.9 + AGP 8.7.3 + Kotlin 2.2.0，打标签即发布 Release。
 
-`compileSdk = 37`（Android 17 / API 37），`targetSdk` 保持 35。AGP 8.7.3 官方只测到 API 35，由 `android/gradle.properties` 的 `android.suppressUnsupportedCompileSdk=37` 放行；AGP 缺 android-37 平台时会自动补下载。
+`compileSdk = 37`（Android 17 / API 37），`targetSdk` 保持 35。AGP 8.7.3 官方只测到 API 35，由 `android/gradle.properties` 的 `android.suppressUnsupportedCompileSdk=37,37.0` 放行。CI 装 API 37 平台时会依次试 channel 0–3，再由 `scripts/prepare-sdk37.py` 把 `android-37.0` 这类目录整理成 AGP 认得的 `platforms/android-37`（修正 `source.properties` / `package.xml` 的 ApiLevel、path 与 SDK XML schema），装不到时还会从 Google 仓库直接下载。
 
 CI 有三道硬断言：
 

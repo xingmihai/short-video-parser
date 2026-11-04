@@ -34,6 +34,10 @@ if "android.suppressUnsupportedCompileSdk=37" not in props:
     problems.append("gradle.properties 缺少 android.suppressUnsupportedCompileSdk=37")
 if "platforms;android-37" not in workflow:
     problems.append("CI 未安装 Android 17 platform")
+if "prepare-sdk37.py" not in workflow:
+    problems.append("CI 未调用 scripts/prepare-sdk37.py 整理 API 37 平台目录")
+if not (ROOT / "scripts/prepare-sdk37.py").exists():
+    problems.append("scripts/prepare-sdk37.py 缺失")
 # 只允许 tag push / PR / 手动触发构建，push 到 main 不应再触发一次
 push_block = workflow.split("pull_request:", 1)[0]
 if "branches:" in push_block:
