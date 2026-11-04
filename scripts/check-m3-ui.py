@@ -2,6 +2,7 @@
 """
 构建前静态校验：界面确实使用 Material 3 Expressive（MDC-Android Views），
 compileSdk / targetSdk = 37、minSdk = 26，发行版文件名与仓库名一致，
+版本号不硬编码、签名走环境密钥、正式发行版不自动发布、预发行只保留一个，
 且工作流不会重复触发构建。编译期不报错的回退，在这里拦住。
 """
 import pathlib
@@ -15,6 +16,7 @@ layout_path = RES / "layout/activity_main.xml"
 gradle_path = ROOT / "android/app/build.gradle"
 props_path = ROOT / "android/gradle.properties"
 workflow_path = ROOT / ".github/workflows/build-apk.yml"
+pre_path = ROOT / ".github/workflows/prerelease.yml"
 manifest_path = ROOT / "android/app/src/main/AndroidManifest.xml"
 filepaths_path = RES / "xml/file_paths.xml"
 java_dir = ROOT / "android/app/src/main/java/com/svproxy"
@@ -30,6 +32,40 @@ layout = read(layout_path)
 gradle = read(gradle_path)
 props = read(props_path)
 workflow = read(workflow_path)
+pre = read(pre_path)
+
+import re
+if re.search(r"\bversionCode\s+\d+", gradle):
+    problems.append("build.gradle 仍硬编码 versionCode 数字")
+if re.search(r'versionName\s+"', gradle):
+    problems.append("build.gradle 仍硬编码 versionName 字符串")
+if "System.getenv(\"APP_VERSION_CODE\")" not in gradle or "System.getenv(\"APP_VERSION_NAME\")" not in gradle:
+    problems.append("版本号未从环境注入")
+if "SIGNING_KEYSTORE" not in gradle or "SIGNING_STORE_PASSWORD" not in gradle:
+    problems.append("签名未从环境密钥注入")
+if "softprops/action-gh-release" in workflow:
+    problems.append("正式工作流仍在自动发布 Release")
+if "gh release create" in workflow:
+    problems.append("正式工作流仍在创建 Release")
+if not pre_path.exists():
+    problems.append("缺少 .github/workflows/prerelease.yml")
+else:
+    for token in ["--prerelease", "gh release delete", "--cleanup-tag", "isPrerelease", "concurrency:"]:
+        if token not in pre:
+            problems.append(f"预发行工作流缺少: {token}")
+    if "secrets.SIGNING_KEYSTORE_BASE64" not in pre:
+        problems.append("预发行工作流未使用签名环境密钥")
+    if re.search(r"v\d+\.\d+\.\d+", pre):
+        problems.append("预发行工作流仍硬编码版本号")
+    if "APP_VERSION_CODE" not in pre or "APP_VERSION_NAME" not in pre:
+        problems.append("预发行工作流未注入自动版本号")
+for wf, name in [(workflow, "build-apk.yml"), (pre, "prerelease.yml")]:
+    if "secrets.SIGNING_KEYSTORE_BASE64" not in wf:
+        problems.append(f"{name} 未载入签名密钥")
+    if "verify-signature.sh" not in wf:
+        problems.append(f"{name} 未校验签名证书")
+if not (ROOT / "scripts/verify-signature.sh").exists():
+    problems.append("scripts/verify-signature.sh 缺失")
 
 if "compileSdk 37" not in gradle:
     problems.append("compileSdk 不是 37")

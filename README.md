@@ -85,15 +85,32 @@ python3 ../scripts/check-m3-ui.py
 python3 ../scripts/check-no-bundle.py app/build/outputs/apk/release/short-video-parser.apk
 ```
 
-GitHub Actions（`.github/workflows/build-apk.yml`）**只在打 `v*` 标签时构建一次**（另有 PR 与手动触发）；push 到 `main` 不再触发，避免 main + tag 两次重复构建。环境：JDK 17 + Android SDK Platform 35 / 37 + Gradle 8.9 + AGP 8.7.3 + Kotlin 2.2.0，打标签即发布 Release。
+GitHub Actions 分两条工作流，互不重复：
+
+| 工作流 | 触发 | 做什么 |
+|---|---|---|
+| `build-apk.yml` | push `v*` 标签 / PR / 手动 | 构建 + 签名 + 上传构建产物，**不自动发布正式发行版**（正式 Release 人工在 GitHub 发布） |
+| `prerelease.yml` | push `main` / 手动 | 自动预发行：先删光所有旧预发行（连 tag），再创建唯一一个 prerelease |
+
+`prerelease.yml` 用 `concurrency` 串行化，末尾还断言仓库里 `isPrerelease` 数量必须为 1。预发行 tag / 版本名 / 版本号都由 `github.run_number` 与提交短 SHA 自动算出，**源码与工作流里不硬编码任何版本号**；`versionCode` 用 run number，`versionName` 形如 `pre-<run>-<sha>`，通过 `APP_VERSION_CODE` / `APP_VERSION_NAME` 注入 `build.gradle`。
+
+签名密钥放在仓库环境密钥（Actions Secrets）里，构建时以环境变量注入，不进仓库：
+
+- `SIGNING_KEYSTORE_BASE64`：JKS 的 Base64
+- `SIGNING_STORE_PASSWORD` / `SIGNING_KEY_PASSWORD`
+- `SIGNING_KEY_ALIAS`
+
+`build.gradle` 检测到 `SIGNING_KEYSTORE` 才用该 JKS 签名，本地无密钥时回退 `debug.keystore`。`scripts/verify-signature.sh` 会比对 APK 证书与密钥库指纹，确保签名确实来自环境密钥。
+
+环境：JDK 17 + Android SDK Platform 35 / 37 + Gradle 8.9 + AGP 8.7.3 + Kotlin 2.2.0。
 
 `compileSdk = 37`、`targetSdk = 37`（Android 17 / API 37），`minSdk = 26`（Android 8.0）。AGP 8.7.3 官方只测到 API 35，由 `android/gradle.properties` 的 `android.suppressUnsupportedCompileSdk=37,37.0` 放行。CI 装 API 37 平台时会依次试 channel 0–3，再由 `scripts/prepare-sdk37.py` 把 `android-37.2-beta3` 这类预览包目录整理成 AGP 认得的唯一 `platforms/android-37`（归一 `source.properties` / `package.xml` 的包路径、ApiLevel、codename 与 SDK XML schema），装不到时还会从 Google 仓库直接下载。同时关闭了 `lintVitalRelease`，预览平台不必再跑 lint。
 
 CI 有三道硬断言：
 
-- `check-m3-ui.py`：主题继承 `Theme.Material3Expressive`、组件齐全、无旧手写资源
+- `check-m3-ui.py`：主题继承 `Theme.Material3Expressive`、组件齐全、无旧手写资源；并断言版本号未硬编码、签名走环境密钥、正式工作流不自动发 Release、预发行工作流存在且只保留一个
 - `check-no-bundle.py`：APK 内无 JS 资产 / JS 引擎 `.so` / `lib/` 下有 `.so`，且文件名必须是 `short-video-parser.apk`
-- `apksigner verify`：签名有效
+- `verify-signature.sh`：APK 签名证书指纹与注入密钥库一致
 
 ---
 

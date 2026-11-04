@@ -1,6 +1,15 @@
 apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 
+// 版本号 / 版本名完全由 CI 环境注入，不在源码里硬编码
+// 本地无环境时用 git 提交数与 short sha 兜底，仍不写死具体版本
+def ciVersionCode = System.getenv("APP_VERSION_CODE") ?: "1"
+def ciVersionName = System.getenv("APP_VERSION_NAME") ?: "0.0.0-local"
+
+// 签名密钥从环境密钥注入；未配置时回退到仓库内 debug.keystore（仅本地构建用）
+def envKeystore = System.getenv("SIGNING_KEYSTORE") ?: ""
+def useReleaseSigning = envKeystore.isNotEmpty() && file(envKeystore).exists()
+
 android {
     namespace "com.svproxy"
     // Android 17 / API 37；AGP 8.7.3 官方只测到 API 35，
@@ -12,8 +21,8 @@ android {
         minSdk 26
         // compileSdk 与 targetSdk 都对齐 Android 17 / API 37
         targetSdk 37
-        versionCode 7
-        versionName "3.3.0"
+        versionCode ciVersionCode.toInteger()
+        versionName ciVersionName
     }
 
     signingConfigs {
@@ -23,12 +32,22 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            if (useReleaseSigning) {
+                storeFile file(envKeystore)
+                storeType "JKS"
+                storePassword System.getenv("SIGNING_STORE_PASSWORD")
+                keyAlias System.getenv("SIGNING_KEY_ALIAS")
+                keyPassword System.getenv("SIGNING_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
-            // 用仓库内 debug.keystore 签名，产出可直接安装的 APK
-            signingConfig signingConfigs.debug
+            // CI 注入 SIGNING_* 时用环境密钥签名，本地回退 debug.keystore
+            if (useReleaseSigning) signingConfig signingConfigs.release
+            else signingConfig signingConfigs.debug
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
