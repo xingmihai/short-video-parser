@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
     <external-files-path name="sv_downloads" path="Download/sv/" />
+    <!-- Android 8/9 直写 /storage/emulated/0/Download/ 时用 FileProvider 暴露 -->
+    <external-path name="public_download" path="Download/" />
 </paths>

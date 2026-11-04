@@ -1,9 +1,13 @@
 package com.svproxy
 
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
+import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import android.widget.ImageView
 import androidx.core.content.FileProvider
 import okhttp3.OkHttpClient
@@ -12,6 +16,9 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+
+/** 一次下载的结果：公共 Download/ 里的 content Uri + 显示名 */
+data class Saved(val uri: Uri, val displayName: String)
 
 /** 带对应平台 Referer 的下载 / 图片加载，不引第三方图片库 */
 object MediaKit {
@@ -39,38 +46,76 @@ object MediaKit {
 
     private fun safeName(n: String) = n.replace(Regex("[^a-zA-Z0-9._\\-\\u4e00-\\u9fa5]"), "_").take(70).ifBlank { "sv-${System.currentTimeMillis()}" }
 
-    fun download(context: Context, url: String, fileName: String, mime: String, referer: String, onDone: (Result<File>) -> Unit) {
+    /**
+     * 下载到公共 Download 目录（/storage/emulated/0/Download/）。
+     * Android 10+ 通过 MediaStore.Downloads 写入；Android 8/9 直接写文件并用 FileProvider 暴露。
+     */
+    fun download(context: Context, url: String, fileName: String, mime: String, referer: String, onDone: (Result<Saved>) -> Unit) {
         pool.submit {
             val result = runCatching {
                 val ext = when { mime.startsWith("image") -> ".jpg"; mime.startsWith("audio") -> ".mp3"; else -> ".mp4" }
                 var name = safeName(fileName); if (!name.contains('.')) name += ext
-                val dir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "sv")
-                val target = File(dir, name)
                 val b = Request.Builder().url(url).get().header("User-Agent", UA)
                 if (referer.isNotEmpty()) b.header("Referer", referer)
                 client.newCall(b.build()).execute().use { resp ->
                     if (!resp.isSuccessful) error("HTTP ${resp.code}")
                     val body = resp.body ?: error("空响应体")
-                    dir.mkdirs()
-                    body.byteStream().use { input -> FileOutputStream(target).use { out -> input.copyTo(out, 64 * 1024) } }
+                    if (Build.VERSION.SDK_INT >= 29) {
+                        val values = ContentValues().apply {
+                            put(MediaStore.Downloads.DISPLAY_NAME, name)
+                            put(MediaStore.Downloads.MIME_TYPE, mime)
+                            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                            put(MediaStore.Downloads.IS_PENDING, 1)
+                        }
+                        val uri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                            ?: error("无法在 Download/ 创建文件")
+                        context.contentResolver.openOutputStream(uri)?.use { out ->
+                            body.byteStream().use { input -> input.copyTo(out, 64 * 1024) }
+                        } ?: error("无法写入 Download/")
+                        values.clear()
+                        values.put(MediaStore.Downloads.IS_PENDING, 0)
+                        context.contentResolver.update(uri, values, null, null)
+                        Saved(uri, name)
+                    } else {
+                        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                        dir.mkdirs()
+                        val target = File(dir, name)
+                        body.byteStream().use { input -> FileOutputStream(target).use { out -> input.copyTo(out, 64 * 1024) } }
+                        Saved(FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", target), name)
+                    }
                 }
-                target
             }
             onDone(result)
         }
     }
 
-    fun open(context: Context, file: File, mime: String) {
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    fun open(context: Context, saved: Saved, mime: String) {
         context.startActivity(Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, mime)
+            setDataAndType(saved.uri, mime)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         })
     }
 
-    fun loadImage(url: String, referer: String, into: ImageView) {
-        if (url.isEmpty()) return
+    /** 结果先显示，大小随后异步探测（不阻塞首屏） */
+    fun probeSize(url: String, referer: String, onDone: (String) -> Unit) {
+        if (url.isEmpty()) { onDone(""); return }
+        pool.submit {
+            val label = runCatching {
+                val b = Request.Builder().url(url).head().header("User-Agent", UA)
+                if (referer.isNotEmpty()) b.header("Referer", referer)
+                client.newCall(b.build()).execute().use { resp ->
+                    val len = resp.header("Content-Length")?.toLongOrNull() ?: 0L
+                    if (len > 0) formatSize(len) else ""
+                }
+            }.getOrDefault("")
+            onDone(label)
+        }
+    }
+
+    /** 图片异步加载，onDone 在主线程回调，用于「先显示再加载」的计数 */
+    fun loadImage(url: String, referer: String, into: ImageView, onDone: ((Boolean) -> Unit)? = null) {
+        if (url.isEmpty()) { onDone?.invoke(false); return }
         pool.submit {
             val bmp = runCatching {
                 val b = Request.Builder().url(url).get().header("User-Agent", UA)
@@ -81,7 +126,10 @@ object MediaKit {
                     BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
                 }
             }.getOrNull()
-            into.post { if (bmp != null) into.setImageBitmap(bmp) }
+            android.os.Handler(android.os.Looper.getMainLooper()).post {
+                if (bmp != null) into.setImageBitmap(bmp)
+                onDone?.invoke(bmp != null)
+            }
         }
     }
 }

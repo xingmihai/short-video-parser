@@ -15,6 +15,9 @@ layout_path = RES / "layout/activity_main.xml"
 gradle_path = ROOT / "android/app/build.gradle"
 props_path = ROOT / "android/gradle.properties"
 workflow_path = ROOT / ".github/workflows/build-apk.yml"
+manifest_path = ROOT / "android/app/src/main/AndroidManifest.xml"
+filepaths_path = RES / "xml/file_paths.xml"
+java_dir = ROOT / "android/app/src/main/java/com/svproxy"
 old_styles = RES / "values/styles.xml"
 
 problems = []
@@ -46,6 +49,30 @@ if not (ROOT / "scripts/prepare-sdk37.py").exists():
 push_block = workflow.split("pull_request:", 1)[0]
 if "branches:" in push_block:
     problems.append("workflow 仍监听 main push，会与 tag push 重复构建")
+
+# ---- 本轮行为护栏 ----
+media_kt = read(java_dir / "Media.kt")
+main_kt = read(java_dir / "MainActivity.kt")
+manifest = read(manifest_path)
+filepaths = read(filepaths_path)
+
+if not (java_dir / "TokenStore.kt").exists():
+    problems.append("缺少 TokenStore.kt（Token 分平台保存）")
+if "TokenStore.get" not in main_kt or "TokenStore.save" not in main_kt:
+    problems.append("MainActivity 未接入分平台 Token 存储")
+for vid in ["btnSaveToken", "btnClearToken", "tvTokenState", "tvAssetsLoading", "llLive"]:
+    if f'@+id/{vid}' not in layout:
+        problems.append(f"布局缺少控件: {vid}")
+if "loadAssets(" not in main_kt or "contentRoot.post" not in main_kt:
+    problems.append("未实现「结果先显示、资源后加载」")
+if "MediaStore.Downloads" not in media_kt or "Environment.DIRECTORY_DOWNLOADS" not in media_kt:
+    problems.append("下载未写入公共 Download/ 目录")
+if "WRITE_EXTERNAL_STORAGE" not in manifest or "public_download" not in filepaths:
+    problems.append("Android 8/9 公共 Download 写入权限或 FileProvider 路径缺失")
+if '"live" -> v.liveVideos.map' not in main_kt:
+    problems.append("动图主下载按钮未改为下载视频")
+if "getExternalFilesDir" in media_kt:
+    problems.append("下载仍写入 App 私有目录")
 
 if "Theme.Material3Expressive" not in themes:
     problems.append("主题未继承 Theme.Material3Expressive.*")

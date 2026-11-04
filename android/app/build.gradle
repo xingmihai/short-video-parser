@@ -12,8 +12,8 @@ android {
         minSdk 26
         // compileSdk 与 targetSdk 都对齐 Android 17 / API 37
         targetSdk 37
-        versionCode 6
-        versionName "3.2.1"
+        versionCode 7
+        versionName "3.3.0"
     }
 
     signingConfigs {

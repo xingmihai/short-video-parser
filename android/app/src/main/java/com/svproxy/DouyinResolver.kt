@@ -550,7 +550,8 @@ object DouyinResolver {
             main = ensureVideoMimeType(main ?: "")
             if (main.isNotEmpty()) {
                 url = main
-                size = probeVideoSize(main)
+                // 结果卡先显示，大小由 UI 层 MediaKit.probeSize 异步补上，不阻塞首屏
+                size = 0L
             }
             for (c in pick.backup) {
                 val conv = ensureVideoMimeType(toHttps(c.replace("playwm", "play")) ?: "")

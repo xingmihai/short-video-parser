@@ -125,7 +125,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="10dp"
-                            android:hint="Cookie（抖音主页 / B站 / 小红书等需要）"
+                            android:hint="Token / Cookie（按平台分别保存）"
                             app:boxCornerRadiusBottomEnd="18dp"
                             app:boxCornerRadiusBottomStart="18dp"
                             app:boxCornerRadiusTopEnd="18dp"
@@ -140,6 +140,39 @@
                                 android:padding="14dp"
                                 android:textAppearance="?attr/textAppearanceBodySmall" />
                         </com.google.android.material.textfield.TextInputLayout>
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnSaveToken"
+                                style="@style/Widget.Material3.Button.TonalButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginEnd="4dp"
+                                android:layout_weight="1"
+                                android:text="保存 Token" />
+
+                            <com.google.android.material.button.MaterialButton
+                                android:id="@+id/btnClearToken"
+                                style="@style/Widget.Material3.Button.TextButton"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="4dp"
+                                android:layout_weight="1"
+                                android:text="清除" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tvTokenState"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:textAppearance="?attr/textAppearanceBodySmall"
+                            android:textColor="?attr/colorOnSurfaceVariant" />
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -337,6 +370,16 @@
                         android:textAppearance="?attr/textAppearanceBodySmall"
                         android:textColor="?attr/colorOnSurfaceVariant" />
 
+                    <TextView
+                        android:id="@+id/tvAssetsLoading"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:text="资源加载中…"
+                        android:textAppearance="?attr/textAppearanceBodySmall"
+                        android:textColor="?attr/colorPrimary"
+                        android:visibility="gone" />
+
                     <com.google.android.material.imageview.ShapeableImageView
                         android:id="@+id/ivCover"
                         android:layout_width="match_parent"
@@ -375,7 +418,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="14dp"
                         app:selectionRequired="false"
-                        app:singleSelection="true">
+                        app:singleSelection="false">
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnPlay"
@@ -401,6 +444,15 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="10dp"
                         android:text="复制直链" />
+
+                    <!-- 抖音实况/动图：每组给一个「下载视频」按钮，避免只下到静态图 -->
+                    <LinearLayout
+                        android:id="@+id/llLive"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:orientation="vertical"
+                        android:visibility="gone" />
 
                     <TextView
                         android:id="@+id/tvExtra"
