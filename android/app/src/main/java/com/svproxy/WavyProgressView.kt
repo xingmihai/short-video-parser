@@ -23,7 +23,7 @@ class WavyProgressView @JvmOverloads constructor(
 ) : View(context, attrs) {
 
     private val primary = MaterialColors.getColor(
-        context, com.google.android.material.R.attr.colorPrimary, Color.parseColor("#6750A4")
+        context, androidx.appcompat.R.attr.colorPrimary, Color.parseColor("#6750A4")
     )
     private val tertiary = MaterialColors.getColor(
         context, com.google.android.material.R.attr.colorTertiary, Color.parseColor("#7D5260")
