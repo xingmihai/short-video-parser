@@ -1,12 +1,13 @@
 package com.svproxy
 
-import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
+import android.transition.TransitionManager
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ArrayAdapter
@@ -14,28 +15,35 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButtonToggleGroup
+import com.google.android.material.chip.Chip
+import com.google.android.material.color.DynamicColors
+import com.google.android.material.color.MaterialColors
+import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import java.util.concurrent.Executors
 
-/** 纯 Kotlin 单 Activity：粘贴分享链接 → 自动识别平台 → 解析 → 播放 / 下载 */
-class MainActivity : Activity() {
+/** 纯 Kotlin 单 Activity（Material 3 Expressive）：粘贴分享链接 → 识别平台 → 解析 → 播放 / 下载 */
+class MainActivity : AppCompatActivity() {
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "sv-parse").apply { isDaemon = true } }
 
+    private lateinit var contentRoot: LinearLayout
+    private lateinit var btnClear: View
+    private lateinit var fabQuick: View
     private lateinit var etInput: EditText
     private lateinit var etCookie: EditText
     private lateinit var etCount: EditText
-    private lateinit var spPlatform: Spinner
-    private lateinit var spLevel: Spinner
+    private lateinit var spPlatform: MaterialAutoCompleteTextView
+    private lateinit var spLevel: MaterialAutoCompleteTextView
     private lateinit var btnAdvanced: Button
     private lateinit var llAdvanced: LinearLayout
     private lateinit var btnPaste: Button
     private lateinit var btnParse: Button
-    private lateinit var progress: ProgressBar
+    private lateinit var progress: WavyProgressView
     private lateinit var tvError: TextView
-    private lateinit var resultRoot: LinearLayout
+    private lateinit var resultRoot: View
     private lateinit var tvPlatform: TextView
     private lateinit var tvMeta: TextView
     private lateinit var tvNote: TextView
@@ -62,24 +70,50 @@ class MainActivity : Activity() {
     private var output: ResolveOutput? = null
     private var selected = 0
     private var platformKeys: List<String> = emptyList()
+    private var platformLabels: List<String> = emptyList()
+    private var selectedPlatform = 0
+    private var selectedLevel = 0
     private val levelKeys = listOf("standard", "exhigh", "lossless", "hires", "sky", "jyeffect", "jymaster")
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Android 12+ 跟随壁纸动态色，低版本回落到 M3 baseline 紫
+        DynamicColors.applyToActivityIfAvailable(this)
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         bind()
+
         val entries = AggregateResolver.selectable()
         platformKeys = entries.map { it.first }
-        spPlatform.adapter = darkAdapter(entries.map { it.second })
-        spLevel.adapter = darkAdapter(listOf("标准", "极高", "无损", "Hires", "沉浸环绕", "高清环绕", "超清母带"))
-        spLevel.setSelection(0)
+        platformLabels = entries.map { it.second }
+        spPlatform.setAdapter(dropdownAdapter(platformLabels))
+        spPlatform.setText(platformLabels.firstOrNull().orEmpty(), false)
+        spPlatform.setOnItemClickListener { _, _, pos, _ -> selectedPlatform = pos }
+        selectedPlatform = 0
+
+        spLevel.setAdapter(dropdownAdapter(listOf("标准", "极高", "无损", "Hires", "沉浸环绕", "高清环绕", "超清母带")))
+        spLevel.setText("标准", false)
+        spLevel.setOnItemClickListener { _, _, pos, _ -> selectedLevel = pos }
+        selectedLevel = 0
 
         btnAdvanced.setOnClickListener {
+            // M3 motion：展开 / 收起走过渡动画
+            TransitionManager.beginDelayedTransition(contentRoot)
             val show = llAdvanced.visibility == View.GONE
             llAdvanced.visibility = if (show) View.VISIBLE else View.GONE
             btnAdvanced.text = if (show) "▾ 收起高级设置" else "▸ 高级设置（Cookie / 音质 / 数量）"
         }
-        btnPaste.setOnClickListener { val t = readClipboard(); if (t.isEmpty()) toast("剪贴板是空的") else doParse(t) }
+        btnClear.setOnClickListener {
+            etInput.setText("")
+            tvError.visibility = View.GONE
+            resultRoot.visibility = View.GONE
+            output = null
+        }
+        val pasteAndParse = View.OnClickListener {
+            val t = readClipboard()
+            if (t.isEmpty()) toast("剪贴板是空的") else doParse(t)
+        }
+        btnPaste.setOnClickListener(pasteAndParse)
+        fabQuick.setOnClickListener(pasteAndParse)
         btnParse.setOnClickListener { doParse(etInput.text.toString()) }
         btnCopy.setOnClickListener { current()?.url?.let { copy(it); toast("直链已复制") } }
         btnPlay.setOnClickListener { current()?.url?.let { openUrl(it) } }
@@ -88,6 +122,9 @@ class MainActivity : Activity() {
     }
 
     private fun bind() {
+        contentRoot = findViewById(R.id.contentRoot)
+        btnClear = findViewById(R.id.btnClear)
+        fabQuick = findViewById(R.id.fabQuick)
         etInput = findViewById(R.id.etInput); etCookie = findViewById(R.id.etCookie); etCount = findViewById(R.id.etCount)
         spPlatform = findViewById(R.id.spPlatform); spLevel = findViewById(R.id.spLevel)
         btnAdvanced = findViewById(R.id.btnAdvanced); llAdvanced = findViewById(R.id.llAdvanced)
@@ -104,33 +141,43 @@ class MainActivity : Activity() {
         tvLive = findViewById(R.id.tvLive); tvBackup = findViewById(R.id.tvBackup); btnMusic = findViewById(R.id.btnMusic)
     }
 
-    private fun darkAdapter(items: List<String>) = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, items) {
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
-            super.getView(position, convertView, parent).apply { findViewById<TextView>(android.R.id.text1)?.setTextColor(0xFFE6E8EC.toInt()) }
-        override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View =
-            super.getDropDownView(position, convertView, parent).apply {
-                setBackgroundColor(0xFF1F2937.toInt())
-                findViewById<TextView>(android.R.id.text1)?.setTextColor(0xFFE6E8EC.toInt())
-            }
-    }
+    private fun dropdownAdapter(items: List<String>) =
+        object : ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, items) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+                super.getView(position, convertView, parent).apply {
+                    val onSurface = MaterialColors.getColor(
+                        context, com.google.android.material.R.attr.colorOnSurface, Color.BLACK
+                    )
+                    val surface = MaterialColors.getColor(
+                        context, com.google.android.material.R.attr.colorSurfaceContainerHigh, Color.WHITE
+                    )
+                    setBackgroundColor(surface)
+                    findViewById<TextView>(android.R.id.text1)?.apply {
+                        setTextColor(onSurface)
+                        setPadding(20, 16, 20, 16)
+                    }
+                }
+        }
 
     private fun doParse(text: String) {
         val value = text.trim()
         if (value.isEmpty()) { showError("请先粘贴分享链接或整段分享文案"); return }
         etInput.setText(value)
-        progress.visibility = View.VISIBLE; tvError.visibility = View.GONE; resultRoot.visibility = View.GONE
+        progress.visibility = View.VISIBLE; progress.setRunning(true)
+        tvError.visibility = View.GONE; resultRoot.visibility = View.GONE
         btnParse.isEnabled = false; btnPaste.isEnabled = false
         val req = AggregateResolver.Request(
             text = value,
-            platformKey = platformKeys.getOrElse(spPlatform.selectedItemPosition) { "auto" },
+            platformKey = platformKeys.getOrElse(selectedPlatform) { "auto" },
             cookie = etCookie.text.toString().trim(),
             count = etCount.text.toString().toIntOrNull()?.coerceIn(1, 200) ?: 18,
-            neteaseLevel = levelKeys.getOrElse(spLevel.selectedItemPosition) { "standard" },
+            neteaseLevel = levelKeys.getOrElse(selectedLevel) { "standard" },
         )
         worker.submit {
             val r = try { AggregateResolver.parse(req) } catch (e: Exception) { ResolveOutcome.Err(-1, "解析异常：${e.message ?: e}") }
             runOnUiThread {
-                progress.visibility = View.GONE; btnParse.isEnabled = true; btnPaste.isEnabled = true
+                progress.visibility = View.GONE; progress.setRunning(false)
+                btnParse.isEnabled = true; btnPaste.isEnabled = true
                 when (r) {
                     is ResolveOutcome.Ok -> render(r.output)
                     is ResolveOutcome.Err -> showError("[${r.code}] ${r.msg}")
@@ -139,25 +186,41 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showError(msg: String) { tvError.text = msg; tvError.visibility = View.VISIBLE; resultRoot.visibility = View.GONE }
+    private fun showError(msg: String) {
+        TransitionManager.beginDelayedTransition(contentRoot)
+        tvError.text = msg; tvError.visibility = View.VISIBLE; resultRoot.visibility = View.GONE
+        progress.visibility = View.GONE; progress.setRunning(false)
+    }
+
     private fun current(): Media? = output?.items?.getOrNull(selected)
 
     private fun render(out: ResolveOutput) {
+        TransitionManager.beginDelayedTransition(contentRoot)
         output = out; selected = 0; resultRoot.visibility = View.VISIBLE
         tvPlatform.text = out.platformLabel
         if (out.note.isNotEmpty()) { tvNote.text = out.note; tvNote.visibility = View.VISIBLE } else tvNote.visibility = View.GONE
         if (out.items.size > 1) {
-            tvCount.text = "共 ${out.items.size} 条，点上方按钮切换"; tvCount.visibility = View.VISIBLE
+            tvCount.text = "共 ${out.items.size} 条，点上方标签切换"; tvCount.visibility = View.VISIBLE
             hsItems.visibility = View.VISIBLE; llItems.removeAllViews()
             out.items.forEachIndexed { i, item ->
-                val b = Button(this).apply {
-                    text = "${i + 1}. ${item.title.take(8).ifEmpty { item.type }}"; textSize = 11f; isAllCaps = false
-                    setTextColor(0xFFD1D5DB.toInt())
-                    background = resources.getDrawable(R.drawable.bg_btn_ghost, null)
-                    layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(34)).apply { marginEnd = dp(6) }
-                    setOnClickListener { selected = i; current()?.let { renderItem(it) } }
+                val chip = Chip(this).apply {
+                    text = "${i + 1}. ${item.title.take(8).ifEmpty { item.type }}"
+                    textSize = 11f
+                    isCheckable = true
+                    isChecked = i == 0
+                    isClickable = true
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT, dp(36)
+                    ).apply { marginEnd = dp(6) }
+                    setOnClickListener {
+                        selected = i
+                        for (c in 0 until llItems.childCount) {
+                            (llItems.getChildAt(c) as? Chip)?.isChecked = (c == i)
+                        }
+                        current()?.let { renderItem(it) }
+                    }
                 }
-                llItems.addView(b)
+                llItems.addView(chip)
             }
         } else { tvCount.visibility = View.GONE; hsItems.visibility = View.GONE }
         out.items.firstOrNull()?.let { renderItem(it) }
@@ -179,6 +242,8 @@ class MainActivity : Activity() {
         val vis = if (v.url.isNullOrEmpty()) View.GONE else View.VISIBLE
         tvUrlLabel.visibility = vis; tvUrl.visibility = vis; tvUrl.text = v.url ?: ""
         btnPlayRow.visibility = vis; btnCopy.visibility = vis
+        // 取消 button group 上一次的选中态，避免切换结果时残留
+        (btnPlayRow as? MaterialButtonToggleGroup)?.clearChecked()
         btnDownload.text = when (v.type) { "audio" -> "下载音频"; "image" -> "下载图片"; else -> "下载" }
         btnDownload.isEnabled = true
 

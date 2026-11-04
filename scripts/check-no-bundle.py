@@ -10,7 +10,9 @@
   - 附一份 APK 内容摘要，便于确认体积构成
 
 用法：python3 scripts/check-no-bundle.py <apk路径>
+另外断言发行版文件名与仓库名一致（short-video-parser.apk）。
 """
+import os
 import sys
 import zipfile
 from collections import Counter
@@ -60,6 +62,8 @@ def main(apk_path: str) -> int:
         print(f"  {k:20} {v / 1048576:>7.2f} MB")
 
     problems = []
+    if os.path.basename(apk_path) != "short-video-parser.apk":
+        problems.append(f"发行版文件名应为 short-video-parser.apk，实际为 {os.path.basename(apk_path)}")
     if not dex:
         problems.append("未找到 classes.dex，产物不是有效的 Android 应用")
     if dex_bytes < 100_000:
@@ -87,4 +91,4 @@ def main(apk_path: str) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1] if len(sys.argv) > 1 else "dist/sv-douyin.apk"))
+    sys.exit(main(sys.argv[1] if len(sys.argv) > 1 else "dist/short-video-parser.apk"))

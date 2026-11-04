@@ -46,7 +46,7 @@ jobs:
           if [ ! -x "$SDKMGR" ]; then SDKMGR="$(command -v sdkmanager || true)"; fi
           if [ -n "$SDKMGR" ] && [ -x "$SDKMGR" ]; then
             yes | "$SDKMGR" --licenses > /dev/null || true
-            "$SDKMGR" "platforms;android-34" "build-tools;34.0.0" "platform-tools" > /dev/null || true
+            "$SDKMGR" "platforms;android-35" "build-tools;35.0.0" "platform-tools" > /dev/null || true
           else
             echo "sdkmanager 未找到，交由 AGP 自动下载所需组件"
           fi
@@ -54,6 +54,9 @@ jobs:
 
       - name: Gradle 缓存
         uses: gradle/actions/setup-gradle@v4
+
+      - name: 校验 Material 3 Expressive UI 资源
+        run: python3 scripts/check-m3-ui.py
 
       - name: 编译 Release APK
         working-directory: android
@@ -66,19 +69,19 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p dist
-          cp android/app/build/outputs/apk/release/*.apk dist/sv-douyin.apk
-          python3 scripts/check-no-bundle.py dist/sv-douyin.apk 2>&1 | tee /tmp/nobundle.log
+          cp android/app/build/outputs/apk/release/*.apk dist/short-video-parser.apk
+          python3 scripts/check-no-bundle.py dist/short-video-parser.apk 2>&1 | tee /tmp/nobundle.log
           echo "=== 产物 ==="
           ls -lh dist/
           echo "=== APK 签名校验 ==="
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f 2>/dev/null | head -1)
-          if [ -n "$APKSIGNER" ]; then "$APKSIGNER" verify --print-certs dist/sv-douyin.apk | head -8; fi
-          echo "APK: $(stat -c %s dist/sv-douyin.apk) bytes"
+          if [ -n "$APKSIGNER" ]; then "$APKSIGNER" verify --print-certs dist/short-video-parser.apk | head -8; fi
+          echo "APK: $(stat -c %s dist/short-video-parser.apk) bytes"
 
       - name: 上传构建产物
         uses: actions/upload-artifact@v4
         with:
-          name: sv-douyin-apk-${{ github.run_number }}
+          name: short-video-parser-apk-${{ github.run_number }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
@@ -87,13 +90,15 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') || inputs.create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v3.0.0-build{0}', github.run_number) }}
-          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('sv-douyin build {0}', github.run_number) }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v3.1.0-build{0}', github.run_number) }}
+          name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('short-video-parser build {0}', github.run_number) }}
           body: |
-            纯 Kotlin 全平台版安装包，由 GitHub Actions 自动构建。
+            Material 3 Expressive 界面版安装包，由 GitHub Actions 自动构建。
 
-            - `sv-douyin.apk`：已签名，直接安装（R8 + 资源压缩）
+            - `short-video-parser.apk`：已签名，直接安装（R8 + 资源压缩）
             - **无 React Native、无 Hermes/JSC、无 index.android.bundle、无 JS 资产**
+            - UI：MDC-Android 1.14.0 `Theme.Material3Expressive`、动态色、非对称形状、
+              Toolbar + FAB、Exposed Dropdown、Button group、Chip、波形进度与过渡动效
             - 14 个平台：抖音(单作品/主页批量)、快手、小红书、B站、微博、头条、
               皮皮虾、皮皮搞笑、最右、豆包AI视频、豆包对话、即梦AI、网易云音乐
             - 解析逻辑全部由 OkHttp + org.json + javax.crypto 编译进 classes.dex
@@ -101,8 +106,8 @@ jobs:
             用法：复制任意平台分享文案 → 打开 App → 粘贴并解析 → 播放 / 下载。
             高级设置里可填 Cookie（抖音主页必填）、选网易云音质与主页条数。
             下载由原生 OkHttp 带对应平台 Referer 完成，不监听端口、无需服务器。
-            CI 会断言 APK 内不存在任何 bundle / JS 引擎 .so。
-          files: dist/sv-douyin.apk
+            CI 会断言 APK 内不存在任何 bundle / JS 引擎 .so，且文件名与仓库名一致。
+          files: dist/short-video-parser.apk
           draft: false
           prerelease: false
 

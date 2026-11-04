@@ -1,10 +1,18 @@
-# sv-douyin（纯 Kotlin · 全平台版）
+# short-video-parser
 
 **在 App 里粘贴任意平台的分享链接，自动识别，直接出无水印直链并播放 / 下载。**
+
+界面使用 **Material 3 Expressive**（MDC-Android Views 1.14.0）：动态色、非对称形状、Toolbar + FAB、Exposed Dropdown、Button group、Chip、波形实时进度与展开过渡动效，浅色 / 深色跟随系统。
 
 **没有 React Native、没有 Hermes / JSC、没有 `index.android.bundle`、没有任何 `.js` / `.hbc` 资产。** 全部逻辑编译进 `classes.dex`，APK 里连一个原生 `.so` 都没有。不监听端口、不转发请求、不需要服务器，也不请求任何第三方解析 API。
 
 解析逻辑移植自 [jiuhunwl/short_videos](https://github.com/jiuhunwl/short_videos) 的 `api/` 目录（原作者 JH-Ahua，MIT）——把里面的 PHP / Python / Workers 入口逐个翻成了 Kotlin。
+
+---
+
+## 下载
+
+[Releases](https://github.com/xingmihai/short-video-parser/releases/latest) 里的 **`short-video-parser.apk`** 已签名，直接安装。
 
 ---
 
@@ -34,75 +42,58 @@
 ## App 里怎么用
 
 1. 复制任意平台的分享文案或链接
-2. 打开 App，点 **「粘贴并解析」**，或直接粘进输入框点「解析」
-3. 顶部自动显示识别出的平台；结果页显示标题、作者、封面、画质 / 时长 / 大小和无水印直链
+2. 打开 App，点 **「粘贴并解析」**（或右下角 FAB），或直接粘进输入框点「解析」
+3. 结果卡显示识别出的平台、标题、作者、封面、画质 / 时长 / 大小和无水印直链
 4. 点 **播放** / **下载** / **复制直链**；图集、实况、备选直链、BGM、互动数据一并列出
-5. 多结果（B 站分 P、抖音主页、豆包多图多视频）用上方序号按钮切换
+5. 多结果（B 站分 P、抖音主页、豆包多图多视频）用上方 Chip 标签切换
+6. 高级设置里可填 Cookie、选网易云音质、设主页批量条数
 
-### 高级设置（可折叠）
-
-| 项 | 用途 |
-|---|---|
-| Cookie | 抖音主页批量**必填**；B站 / 小红书 / 头条 / 快手 / 豆包对话 / 网易云可选填 |
-| 网易云音质 | 标准 / 极高 / 无损 / Hires / 沉浸环绕 / 高清环绕 / 超清母带 |
-| 主页条数 | 抖音主页批量拉取数量，默认 18 |
+播放若被防盗链拦截，用「下载」——由原生 OkHttp 带对应平台 Referer 拉取，不经过任何代理。
 
 ---
 
-## 实现
+## UI（Material 3 Expressive）
 
-| 文件 | 作用 |
+| 设计点 | 落地 |
 |---|---|
-| `Core.kt` | 统一 OkHttp 层、输出模型、平台识别、org.json 扩展 |
-| `AggregateResolver.kt`（在 `ResolversExtra.kt` 内） | 聚合分发入口，一个调用走完所有平台 |
-| `DouyinResolver.kt` | 抖音单作品（原画 302、画质选取、图集 / 实况 / BGM） |
-| `ResolversCommon.kt` | 快手 / 小红书 / B站 / 微博 / 头条 / 皮皮虾 / 皮皮搞笑 / 最右 |
-| `ResolversExtra.kt` | 豆包 AI 视频 / 豆包对话 / 即梦 / 网易云 / 抖音主页批量 / 聚合 |
-| `MainActivity.kt` + `activity_main.xml` | 单 Activity 界面 |
-| `Media.kt` | 带对应平台 Referer 下载 + 异步加载网络图片 |
-| `scripts/check-no-bundle.py` | 构建期断言「零 JS 资产」 |
+| Vibrant colors / 动态色 | `Theme.Material3Expressive.DayNight.NoActionBar` + `DynamicColors`（Android 12+ 跟随壁纸，低版本回落 M3 baseline 紫） |
+| Contrasting shapes | 输入卡 / 结果卡用反向非对称圆角 `ShapeAppearance.App.Card*` |
+| Toolbars + FAB | 顶部 `MaterialToolbar`（标题 + 副标题 + 清空按钮），右下角 `FloatingActionButton` 一键粘贴解析 |
+| Adaptive components | `TextInputLayout`  outlined box、`MaterialAutoCompleteTextView` exposed dropdown 选平台 / 音质 |
+| Button groups | `MaterialButtonToggleGroup` 组织「播放 / 下载」相关动作 |
+| Waveform progress | 自绘 `WavyProgressView`：双相位正弦波，颜色取自主题 |
+| Flexible typography | 全量使用 `textAppearanceHeadline*` / `Title*` / `Body*` / `Label*` token |
+| Intuitive motion | 高级设置展开、结果卡出现走 `TransitionManager` 过渡 |
 
-技术选型：OkHttp 4.12（网络）、`org.json`（Android 内置）、`BitmapFactory`（图片，不引 Glide/Coil）、`javax.crypto`（网易云 eapi）、`FileProvider`（下载后调起系统播放器）。Activity 是 `android.app.Activity` + 平台 `Theme.Material`，**不依赖 AppCompat**。
-
-### 防盗链处理
-
-各平台下载时由 `Media.refererFor(platform)` 注入对应 Referer，封面 / 图集加载也带同样的头：
-
-```
-抖音 → https://www.douyin.com/          快手 → https://www.kuaishou.com/
-小红书 → https://www.xiaohongshu.com/     B站 → https://www.bilibili.com/
-微博 → https://weibo.com/                网易云 → https://music.163.com/  …
-```
+MDC-Android Views 1.14.0 是官方最后一个稳定 Views 版本，Compose 是后续方向；本项目保持纯 Kotlin + XML，不引入 Compose 运行时。
 
 ---
 
-## 跑起来
+## 构建
 
 ```bash
-git clone https://github.com/xingmihai/sv-proxy-android.git
-cd sv-proxy-android/android
-./gradlew assembleRelease
-# 产物：app/build/outputs/apk/release/app-release.apk
+cd android
+./gradlew assembleRelease     # 产出 app/build/outputs/apk/release/short-video-parser.apk
+python3 ../scripts/check-m3-ui.py
+python3 ../scripts/check-no-bundle.py app/build/outputs/apk/release/short-video-parser.apk
 ```
 
----
+GitHub Actions（`.github/workflows/build-apk.yml`）在 push / PR / 打 `v*` 标签时自动构建：JDK 17 + Android SDK 35 + Gradle 8.9 + AGP 8.7.3，打标签即发布 Release。
 
-## CI 自动出安装包
+CI 有三道硬断言：
 
-`.github/workflows/build-apk.yml`：push `main` / PR / 手动触发 → 构建；打 `v*` 标签 → 发布 Release。
-
-流程：JDK 17 → Android SDK 34 → `./gradlew assembleRelease` → `check-no-bundle.py` 断言零 JS 资产 / 零 JS 引擎 so / `lib/` 为空 / `classes.dex` 非空 → 签名校验 → 上传 / 发布。Release 只出一个 `sv-douyin.apk`。
-
----
-
-## 几点提示
-
-- 解析依赖各平台**未公开的网页 / 接口结构**，平台改版或加签名时会返回失败，App 直接显示错误码与原因，不会白屏。
-- 抖音主页、B 站高画质、网易云 VIP 等需要登录态的功能，Cookie 由用户自己在高级设置里填，**App 不上传、不内置任何账号信息**。
-- 直链带 `x-expires` 等时效参数，过期返回 404，实时解析即时使用，别缓存直链。
-- 播放若被 CDN 防盗链拦截，点「下载」——那条走 OkHttp 带 Referer 拉取，最稳。
-- 想加平台：在 `Platform.kt` 加关键词、写一个 Resolver、在 `AggregateResolver` 注册即可，界面不用动。
+- `check-m3-ui.py`：主题继承 `Theme.Material3Expressive`、组件齐全、无旧手写资源
+- `check-no-bundle.py`：APK 内无 JS 资产 / JS 引擎 `.so` / `lib/` 下有 `.so`，且文件名必须是 `short-video-parser.apk`
+- `apksigner verify`：签名有效
 
 ---
 
-解析逻辑源自 [jiuhunwl/short_videos](https://github.com/jiuhunwl/short_videos) `api/` 目录，原作者 JH-Ahua（www.jiuhunwl.cn）。License: MIT。
+## 说明
+
+解析依赖各平台未公开的网页 / 接口结构，平台改版或加签名时可能返回失败，App 会直接显示错误码，不会白屏。需要 Cookie 的功能由使用者自己填写，App 不内置、不上传任何账号信息。
+
+本项目仅供学习研究，请勿用于侵犯版权或违反平台条款的用途。
+
+## 授权
+
+MIT。解析逻辑源自 [jiuhunwl/short_videos](https://github.com/jiuhunwl/short_videos)（MIT）。

@@ -12,3 +12,6 @@
 
 # androidx.core FileProvider 由 Manifest 反射实例化
 -keep class androidx.core.content.FileProvider { *; }
+
+# 布局 XML 中引用的自定义 View（双保险，AGP 也会自动生成 keep 规则）
+-keep class com.svproxy.WavyProgressView { *; }

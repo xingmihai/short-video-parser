@@ -3,14 +3,15 @@ apply plugin: "org.jetbrains.kotlin.android"
 
 android {
     namespace "com.svproxy"
-    compileSdk 34
+    // MDC 1.14.0 (M3 Expressive) 编译于 compileSdk 35
+    compileSdk 35
 
     defaultConfig {
         applicationId "com.svproxy"
         minSdk 24
-        targetSdk 34
-        versionCode 3
-        versionName "3.0.0"
+        targetSdk 35
+        versionCode 4
+        versionName "3.1.0"
     }
 
     signingConfigs {
@@ -29,6 +30,13 @@ android {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+        }
+    }
+
+    // 发行版文件名与仓库名一致，不再叫 sv-douyin.apk
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            outputFileName = "short-video-parser.apk"
         }
     }
 
@@ -57,4 +65,7 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     // FileProvider：下载后用 content:// 交给系统播放器
     implementation("androidx.core:core-ktx:1.13.1")
+    // Material 3 Expressive（MDC-Android Views 1.14.0，官方最后一个稳定 Views 版本）
+    implementation("com.google.android.material:material:1.14.0")
+    implementation("androidx.appcompat:appcompat:1.7.0")
 }

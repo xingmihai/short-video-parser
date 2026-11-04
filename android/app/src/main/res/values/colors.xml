@@ -1,8 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#0f1115</color>
-    <color name="card">#171b22</color>
-    <color name="stroke">#2a3038</color>
-    <color name="text">#e6e8ec</color>
-    <color name="accent">#2563eb</color>
+    <!-- M3 baseline seed（紫），动态色开启时由系统壁纸取色覆盖 -->
+    <color name="md_primary">#6750A4</color>
+    <color name="md_on_primary">#FFFFFF</color>
+    <color name="md_primary_container">#EADDFF</color>
+    <color name="md_on_primary_container">#21005D</color>
+    <color name="md_secondary">#625B71</color>
+    <color name="md_on_secondary">#FFFFFF</color>
+    <color name="md_secondary_container">#E8DEF8</color>
+    <color name="md_on_secondary_container">#1D192B</color>
+    <color name="md_tertiary">#7D5260</color>
+    <color name="md_tertiary_container">#FFD8E4</color>
+    <color name="md_error">#B3261E</color>
+    <color name="md_error_container">#F9DEDC</color>
+    <color name="md_on_error_container">#410E0B</color>
+
+    <!-- 应用图标背景 -->
+    <color name="ic_launcher_background">#6750A4</color>
 </resources>

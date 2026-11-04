@@ -1,14 +1,15 @@
-// 纯 Android 项目：只有 AGP + Kotlin 插件，没有 React Native / Hermes / JS 引擎
+// 纯 Android 项目：AGP + Kotlin + Material Components（Views），无 React Native / Hermes / JS 引擎
 buildscript {
     ext {
-        kotlinVersion = "1.9.24"
+        // Kotlin 2.2.x 兼容 AGP 8.7.3 / Gradle 8.9，MDC 1.14.0 要求这一套工具链
+        kotlinVersion = "2.2.0"
     }
     repositories {
         google()
         mavenCentral()
     }
     dependencies {
-        classpath("com.android.tools.build:gradle:8.5.0")
+        classpath("com.android.tools.build:gradle:8.7.3")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion")
     }
 }

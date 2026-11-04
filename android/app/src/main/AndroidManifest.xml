@@ -5,7 +5,8 @@
 
     <application
         android:allowBackup="false"
-        android:icon="@android:drawable/ic_menu_gallery"
+        android:icon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/AppTheme">
 
