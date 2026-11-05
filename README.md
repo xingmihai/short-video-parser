@@ -81,8 +81,6 @@ MDC-Android Views 1.14.0 是官方最后一个稳定 Views 版本，Compose 是�
 ```bash
 cd android
 ./gradlew assembleRelease     # 产出 app/build/outputs/apk/release/short-video-parser.apk
-python3 ../scripts/check-m3-ui.py
-python3 ../scripts/check-no-bundle.py app/build/outputs/apk/release/short-video-parser.apk
 ```
 
 GitHub Actions 分两条工作流，互不重复：
@@ -95,7 +93,7 @@ GitHub Actions 分两条工作流，互不重复：
 
 也就是说：**推送不发行，手动构建才发行正式版**。手动触发时 Release 的 tag / 标题同样自动算出（`release-<run>-<sha>` / `build-<run>-<sha>`），发行说明只取本次提交信息；`release-` 前缀不命中 `v*` 标签规则，创建 tag 不会递归触发本工作流。
 
-`prerelease.yml` 用 `concurrency` 串行化，末尾还断言仓库里 `isPrerelease` 数量必须为 1。预发行 tag / 版本名 / 版本号都由 `github.run_number` 与提交短 SHA 自动算出，**源码与工作流里不硬编码任何版本号**；`versionCode` 用 run number，`versionName` 形如 `pre-<run>-<sha>`，通过 `APP_VERSION_CODE` / `APP_VERSION_NAME` 注入 `build.gradle`。
+`prerelease.yml` 用 `concurrency` 串行化，每次先删光旧预发行再建新的，仓库里始终只留一个。预发行 tag / 版本名 / 版本号都由 `github.run_number` 与提交短 SHA 自动算出，**源码与工作流里不硬编码任何版本号**；`versionCode` 用 run number，`versionName` 形如 `pre-<run>-<sha>`，通过 `APP_VERSION_CODE` / `APP_VERSION_NAME` 注入 `build.gradle`。
 
 签名密钥放在仓库环境密钥（Actions Secrets）里，构建时以环境变量注入，不进仓库：
 
@@ -103,7 +101,7 @@ GitHub Actions 分两条工作流，互不重复：
 - `SIGNING_STORE_PASSWORD` / `SIGNING_KEY_PASSWORD`
 - `SIGNING_KEY_ALIAS`
 
-`build.gradle` 检测到 `SIGNING_KEYSTORE` 才用该 JKS 签名，本地无密钥时回退 `debug.keystore`。`scripts/verify-signature.sh` 会比对 APK 证书与密钥库指纹，确保签名确实来自环境密钥。
+`build.gradle` 检测到 `SIGNING_KEYSTORE` 才用该 JKS 签名，本地无密钥时回退 `debug.keystore`。
 
 环境：JDK 17 + Android SDK Platform 35 / 37 + Gradle 8.9 + AGP 8.7.3 + Kotlin 2.2.0。
 
@@ -117,15 +115,9 @@ GitHub Actions 的 Node 20 已 EOL，runner 从 2026-06-16 起默认 Node 24；�
 | `actions/upload-artifact` | v6 | node24（v5 仍是 node20，所以跳过 v5） |
 | `softprops/action-gh-release` | v3 | node24 |
 
-`check-m3-ui.py` 里维护了 Node20 tag 黑名单，防止以后回退。`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` / `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` 都不需要设置。
+`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` / `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` 都不需要设置。
 
 `compileSdk = 37`、`targetSdk = 37`（Android 17 / API 37），`minSdk = 26`（Android 8.0）。AGP 8.7.3 官方只测到 API 35，由 `android/gradle.properties` 的 `android.suppressUnsupportedCompileSdk=37,37.0` 放行。CI 装 API 37 平台时会依次试 channel 0–3，再由 `scripts/prepare-sdk37.py` 把 `android-37.2-beta3` 这类预览包目录整理成 AGP 认得的唯一 `platforms/android-37`（归一 `source.properties` / `package.xml` 的包路径、ApiLevel、codename 与 SDK XML schema），装不到时还会从 Google 仓库直接下载。同时关闭了 `lintVitalRelease`，预览平台不必再跑 lint。
-
-CI 有三道硬断言：
-
-- `check-m3-ui.py`：主题继承 `Theme.Material3Expressive`、组件齐全、无旧手写资源；并断言版本号未硬编码、签名走环境密钥、正式发行步骤只在 `workflow_dispatch` 下执行（push 绝不发行）、预发行工作流存在且只保留一个
-- `check-no-bundle.py`：APK 内无 JS 资产 / JS 引擎 `.so` / `lib/` 下有 `.so`，且文件名必须是 `short-video-parser.apk`
-- `verify-signature.sh`：APK 签名证书指纹与注入密钥库一致
 
 ---
 

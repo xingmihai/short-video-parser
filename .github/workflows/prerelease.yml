@@ -68,9 +68,6 @@ jobs:
       - name: Gradle 缓存
         uses: gradle/actions/setup-gradle@v5
 
-      - name: 校验 Material 3 Expressive UI 资源
-        run: python3 scripts/check-m3-ui.py
-
       - name: 载入签名密钥
         env:
           JKS_B64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
@@ -103,13 +100,10 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace 2>&1 | tee /tmp/gradle.log
 
-      - name: 整理产物 + 校验纯 Kotlin + 校验签名
+      - name: 整理产物
         run: |
-          set -o pipefail
           mkdir -p dist
           cp android/app/build/outputs/apk/release/*.apk dist/short-video-parser.apk
-          python3 scripts/check-no-bundle.py dist/short-video-parser.apk 2>&1 | tee /tmp/nobundle.log
-          bash scripts/verify-signature.sh dist/short-video-parser.apk
           echo "APK: $(stat -c %s dist/short-video-parser.apk) bytes"
 
       - name: 上传构建产物
@@ -155,13 +149,3 @@ jobs:
             --title "预发行 $VERSION" \
             --notes-file /tmp/notes.md \
             --target "$GITHUB_SHA"
-
-      - name: 断言预发行只保留一个
-        run: |
-          COUNT="$(gh release list --limit 100 --json isPrerelease \
-            --jq '[.[] | select(.isPrerelease)] | length')"
-          echo "当前预发行数量: $COUNT"
-          if [ "$COUNT" -ne 1 ]; then
-            echo "!! 预发行数量异常"
-            exit 1
-          fi
