@@ -2,8 +2,9 @@
 """
 构建前静态校验：界面确实使用 Material 3 Expressive（MDC-Android Views），
 compileSdk / targetSdk = 37、minSdk = 26，发行版文件名与仓库名一致，
-版本号不硬编码、签名走环境密钥、正式发行版不自动发布、预发行只保留一个，
-且工作流不会重复触发构建。编译期不报错的回退，在这里拦住。
+版本号不硬编码、签名走环境密钥、push 不发行 / 手动才发行、预发行只保留一个，
+所有 action 使用 Node 24 运行时版本、工作流不会重复触发构建。
+编译期不报错的回退，在这里拦住。
 """
 import pathlib
 import sys
@@ -75,7 +76,17 @@ else:
         problems.append("预发行工作流仍硬编码版本号")
     if "APP_VERSION_CODE" not in pre or "APP_VERSION_NAME" not in pre:
         problems.append("预发行工作流未注入自动版本号")
+# Node 20 已 EOL，runner 强制 Node 24；这些 tag 的 action.yml 仍声明 node20
+node20_pins = [
+    "actions/checkout@v4", "actions/checkout@v3",
+    "actions/upload-artifact@v4", "actions/upload-artifact@v5",
+    "gradle/actions/setup-gradle@v4", "gradle/actions/setup-gradle@v3",
+    "softprops/action-gh-release@v2",
+]
 for wf, name in [(workflow, "build-apk.yml"), (pre, "prerelease.yml")]:
+    for pin in node20_pins:
+        if pin in wf:
+            problems.append(f"{name} 仍使用 Node20 action: {pin}")
     # runner context 不允许出现在 job 级 env（会让整个 workflow 解析失败）
     job_head = wf.split("- name:", 1)[0]
     if "${{ runner." in job_head:

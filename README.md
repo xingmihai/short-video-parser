@@ -107,6 +107,18 @@ GitHub Actions 分两条工作流，互不重复：
 
 环境：JDK 17 + Android SDK Platform 35 / 37 + Gradle 8.9 + AGP 8.7.3 + Kotlin 2.2.0。
 
+GitHub Actions 的 Node 20 已 EOL，runner 从 2026-06-16 起默认 Node 24；工作流里的 action 全部使用声明 `runs.using: node24` 的版本，不再出现「forced to run on Node.js 24」警告：
+
+| action | 版本 | 运行时 |
+|---|---|---|
+| `actions/checkout` | v5 | node24 |
+| `actions/setup-java` | v5 | node24 |
+| `gradle/actions/setup-gradle` | v5 | node24 |
+| `actions/upload-artifact` | v6 | node24（v5 仍是 node20，所以跳过 v5） |
+| `softprops/action-gh-release` | v3 | node24 |
+
+`check-m3-ui.py` 里维护了 Node20 tag 黑名单，防止以后回退。`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` / `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION` 都不需要设置。
+
 `compileSdk = 37`、`targetSdk = 37`（Android 17 / API 37），`minSdk = 26`（Android 8.0）。AGP 8.7.3 官方只测到 API 35，由 `android/gradle.properties` 的 `android.suppressUnsupportedCompileSdk=37,37.0` 放行。CI 装 API 37 平台时会依次试 channel 0–3，再由 `scripts/prepare-sdk37.py` 把 `android-37.2-beta3` 这类预览包目录整理成 AGP 认得的唯一 `platforms/android-37`（归一 `source.properties` / `package.xml` 的包路径、ApiLevel、codename 与 SDK XML schema），装不到时还会从 Google 仓库直接下载。同时关闭了 `lintVitalRelease`，预览平台不必再跑 lint。
 
 CI 有三道硬断言：
